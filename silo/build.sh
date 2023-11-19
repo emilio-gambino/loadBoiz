@@ -1,3 +1,3 @@
 #!/bin/bash
-MODE=perf make -j16
-MODE=perf make -j16 dbtest
+MODE=perf DEBUG=0 make -j
+MODE=perf DEBUG=0 make -j dbtest

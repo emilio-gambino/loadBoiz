@@ -6,10 +6,21 @@ NUM_THREADS=1
 
 QPS=2000
 MAXREQS=20000
-WARMUPREQS=20000
+WARMUPREQS=1
 
 TBENCH_QPS=${QPS} TBENCH_MAXREQS=${MAXREQS} TBENCH_WARMUPREQS=${WARMUPREQS} \
-    TBENCH_MINSLEEPNS=10000 chrt -r 99 \
+    TBENCH_MINSLEEPNS=10000 TBENCH_RANDSEED=0\
     ./out-perf.masstree/benchmarks/dbtest_integrated --verbose \
     --bench tpcc --num-threads ${NUM_THREADS} --scale-factor ${NUM_WAREHOUSES} \
-    --retry-aborted-transactions --ops-per-worker 10000000
+    --ops-per-worker 1000
+
+#TBENCH_QPS=${QPS} TBENCH_MAXREQS=${MAXREQS} TBENCH_WARMUPREQS=${WARMUPREQS} \
+#    TBENCH_MINSLEEPNS=10000 \
+#    gdb --args ./out-perf.debug.masstree/benchmarks/dbtest_integrated --verbose \
+#    --bench tpcc --num-threads ${NUM_THREADS} --scale-factor ${NUM_WAREHOUSES} \
+#    --ops-per-worker 10000000
+#TBENCH_QPS=${QPS} TBENCH_MAXREQS=${MAXREQS} TBENCH_WARMUPREQS=${WARMUPREQS} \
+#    TBENCH_MINSLEEPNS=10000 chrt -r 99 \
+#    ./out-perf.masstree/benchmarks/dbtest_integrated --verbose \
+#    --bench tpcc --num-threads ${NUM_THREADS} --scale-factor ${NUM_WAREHOUSES} \
+#    --retry-aborted-transactions --ops-per-worker 10000000

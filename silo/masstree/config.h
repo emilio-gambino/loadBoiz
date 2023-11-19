@@ -64,7 +64,7 @@
 #define HAVE_INTTYPES_H 1
 
 /* Define if you are using libjemalloc for malloc. */
-#define HAVE_JEMALLOC 1
+/* #undef HAVE_JEMALLOC */
 
 /* Define if you have libnuma. */
 #define HAVE_LIBNUMA 1

@@ -47,7 +47,7 @@ Client::Client(int _nthreads) {
     nthreads = _nthreads;
     pthread_mutex_init(&lock, nullptr);
     pthread_barrier_init(&barrier, nullptr, nthreads);
-    
+
     minSleepNs = getOpt("TBENCH_MINSLEEPNS", 0);
     seed = getOpt("TBENCH_RANDSEED", 0);
     lambda = getOpt<double>("TBENCH_QPS", 1000.0) * 1e-9;
@@ -56,10 +56,11 @@ Client::Client(int _nthreads) {
 
     startedReqs = 0;
 
+
     tBenchClientInit();
 }
 
-Request* Client::startReq() {
+Request *Client::startReq() {
     if (status == INIT) {
         pthread_barrier_wait(&barrier); // Wait for all threads to start up
 
@@ -82,7 +83,7 @@ Request* Client::startReq() {
 
     pthread_mutex_lock(&lock);
 
-    Request* req = new Request();
+    Request *req = new Request();
     size_t len = tBenchClientGenReq(&req->data);
     req->len = len;
 
@@ -101,12 +102,12 @@ Request* Client::startReq() {
     return req;
 }
 
-void Client::finiReq(Response* resp) {
+void Client::finiReq(Response *resp) {
     pthread_mutex_lock(&lock);
 
     auto it = inFlightReqs.find(resp->id);
     assert(it != inFlightReqs.end());
-    Request* req = it->second;
+    Request *req = it->second;
 
     if (status == ROI) {
         uint64_t curNs = getCurNs();
@@ -147,12 +148,12 @@ void Client::dumpStats() {
     int reqs = sjrnTimes.size();
 
     for (int r = 0; r < reqs; ++r) {
-        out.write(reinterpret_cast<const char*>(&queueTimes[r]), 
-                    sizeof(queueTimes[r]));
-        out.write(reinterpret_cast<const char*>(&svcTimes[r]), 
-                    sizeof(svcTimes[r]));
-        out.write(reinterpret_cast<const char*>(&sjrnTimes[r]), 
-                    sizeof(sjrnTimes[r]));
+        out.write(reinterpret_cast<const char *>(&queueTimes[r]),
+                  sizeof(queueTimes[r]));
+        out.write(reinterpret_cast<const char *>(&svcTimes[r]),
+                  sizeof(svcTimes[r]));
+        out.write(reinterpret_cast<const char *>(&sjrnTimes[r]),
+                  sizeof(sjrnTimes[r]));
     }
     out.close();
 }
@@ -160,16 +161,15 @@ void Client::dumpStats() {
 /*******************************************************************************
  * Networked Client
  *******************************************************************************/
-NetworkedClient::NetworkedClient(int nthreads, std::string serverip, 
-        int serverport) : Client(nthreads)
-{
+NetworkedClient::NetworkedClient(int nthreads, std::string serverip,
+                                 int serverport) : Client(nthreads) {
     pthread_mutex_init(&sendLock, nullptr);
     pthread_mutex_init(&recvLock, nullptr);
 
     // Get address info
     int status;
     struct addrinfo hints;
-    struct addrinfo* servInfo;
+    struct addrinfo *servInfo;
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
@@ -178,13 +178,13 @@ NetworkedClient::NetworkedClient(int nthreads, std::string serverip,
 
     std::stringstream portstr;
     portstr << serverport;
-    
-    const char* serverStr = serverip.size() ? serverip.c_str() : nullptr;
 
-    if ((status = getaddrinfo(serverStr, portstr.str().c_str(), &hints, 
-                    &servInfo)) != 0) {
+    const char *serverStr = serverip.size() ? serverip.c_str() : nullptr;
+
+    if ((status = getaddrinfo(serverStr, portstr.str().c_str(), &hints,
+                              &servInfo)) != 0) {
         std::cerr << "getaddrinfo() failed: " << gai_strerror(status) \
-            << std::endl;
+ << std::endl;
         exit(-1);
     }
 
@@ -201,19 +201,19 @@ NetworkedClient::NetworkedClient(int nthreads, std::string serverip,
     }
 
     int nodelay = 1;
-    if (setsockopt(serverFd, IPPROTO_TCP, TCP_NODELAY, 
-                reinterpret_cast<char*>(&nodelay), sizeof(nodelay)) == -1) {
+    if (setsockopt(serverFd, IPPROTO_TCP, TCP_NODELAY,
+                   reinterpret_cast<char *>(&nodelay), sizeof(nodelay)) == -1) {
         std::cerr << "setsockopt(TCP_NODELAY) failed: " << strerror(errno) \
-            << std::endl;
+ << std::endl;
         exit(-1);
     }
 }
 
-bool NetworkedClient::send(Request* req) {
+bool NetworkedClient::send(Request *req) {
     pthread_mutex_lock(&sendLock);
 
     int len = sizeof(Request) - MAX_REQ_BYTES + req->len;
-    int sent = sendfull(serverFd, reinterpret_cast<const char*>(req), len, 0);
+    int sent = sendfull(serverFd, reinterpret_cast<const char *>(req), len, 0);
     if (sent != len) {
         error = strerror(errno);
     }
@@ -223,18 +223,18 @@ bool NetworkedClient::send(Request* req) {
     return (sent == len);
 }
 
-bool NetworkedClient::recv(Response* resp) {
+bool NetworkedClient::recv(Response *resp) {
     pthread_mutex_lock(&recvLock);
 
     int len = sizeof(Response) - MAX_RESP_BYTES; // Read request header first
-    int recvd = recvfull(serverFd, reinterpret_cast<char*>(resp), len, 0);
+    int recvd = recvfull(serverFd, reinterpret_cast<char *>(resp), len, 0);
     if (recvd != len) {
         error = strerror(errno);
         return false;
     }
 
     if (resp->type == RESPONSE) {
-        recvd = recvfull(serverFd, reinterpret_cast<char*>(&resp->data), \
+        recvd = recvfull(serverFd, reinterpret_cast<char *>(&resp->data), \
                 resp->len, 0);
 
         if (static_cast<size_t>(recvd) != resp->len) {

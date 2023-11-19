@@ -5,7 +5,7 @@ ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 if [[ $# -eq 0 ]]
 then
     HARNESS_DIR=harness
-    APP_DIRS="img-dnn masstree moses shore silo specjbb sphinx xapian"
+    APP_DIRS="masstree shore silo"
 else
     APP_DIRS=$@
 fi

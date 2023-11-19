@@ -9,7 +9,7 @@ CHECK_INVARIANTS ?= 0
 # 1 = jemalloc
 # 2 = tcmalloc
 # 3 = flow
-USE_MALLOC_MODE ?= 1
+USE_MALLOC_MODE ?= 0
 
 MYSQL ?= 1
 MYSQL_SHARE_DIR ?= /x/stephentu/mysql-5.5.29/build/sql/share
@@ -78,7 +78,7 @@ endif
 CXXFLAGS := -g -Wall -std=c++0x
 CXXFLAGS += -MD -Ithird-party/lz4 -DCONFIG_H=\"$(CONFIG_H)\"
 ifeq ($(DEBUG_S),1)
-        CXXFLAGS += -fno-omit-frame-pointer -DDEBUG
+        CXXFLAGS += -g -fno-omit-frame-pointer -DDEBUG
 else
         CXXFLAGS += -O2 -funroll-loops -fno-omit-frame-pointer
 endif
@@ -239,8 +239,8 @@ masstree/configure masstree/config.h.in: masstree/configure.ac
 
 .PHONY: dbtest
 dbtest: $(O)/benchmarks/dbtest_integrated \
-	$(O)/benchmarks/dbtest_server_networked \
-	$(O)/benchmarks/dbtest_client_networked
+	#$(O)/benchmarks/dbtest_server_networked \
+	#$(O)/benchmarks/dbtest_client_networked
 
 $(O)/benchmarks/dbtest_integrated: $(O)/benchmarks/dbtest.o \
 	$(O)/benchmarks/client.o $(OBJFILES) $(MASSTREE_OBJFILES) \

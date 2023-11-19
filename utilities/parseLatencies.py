@@ -1,34 +1,32 @@
 import sys
 import os
 import time
+
 from psutil import virtual_memory
 import multiprocessing
 import numpy as np
 from scipy import stats
 
 mem = virtual_memory()
-ram = round(mem.total/1024**3)
+ram = round(mem.total / 1024 ** 3)
 cpu = multiprocessing.cpu_count()
 
 print("{} cores and {} memory".format(cpu, ram))
 
-paths = [r"../img-dnn/lats.bin", r"../masstree/lats.bin",
-         r"../silo/lats.bin", r"../specjbb/lats.bin", r"../sphinx/lats.bin"]
-buildStatements = [r"(cd ../harness/ ; sudo ./build.sh)", r"(cd ../ ; sudo ./build.sh harness)", r"(cd ../img-dnn/ ; sudo ./build.sh)",
-                   r"(cd ../masstree/ ; sudo ./build.sh)", r"(cd ../silo/ ; sudo ./build.sh)", r"(cd ../specjbb/ ; sudo ./build.sh)", r"(cd ../sphinx/ ; sudo rm -r pocketsphinx-5prealpha sphinx-install/ sphinxbase-5prealpha ; sudo ./build.sh)"]
-#executeStatements = [r"(cd ../img-dnn/ ; sudo ./run.sh)", r"(cd ../masstree/ ; sudo ./run.sh)", r"(cd ../silo/ ; sudo ./run.sh)", r"(cd ../specjbb/ ; sudo ./run.sh)",  r"(sudo chmod +x ../convert.sh; sudo ../convert.sh; cd ../sphinx/ ; sudo ./run.sh)"]
+#paths = [r"../masstree/lats.bin"]  
+paths = [r"../silo/lats.bin"]
+#buildStatements = [r"(cd ../harness/ ; sudo ./build.sh)", r"(cd ../ ; sudo ./build.sh harness)", r"(cd ../masstree/ ; sudo ./build.sh)"]  # , r"(cd ../silo/ ; sudo ./build.sh)"]
+buildStatements = [r"(cd ../harness/ ; sudo ./build.sh)", r"(cd ../ ; sudo ./build.sh harness)",  r"(cd ../silo/ ; sudo ./build.sh)"]
 executeStatement = r"(cd ../{}/ ; sudo ./run.sh > {}.txt)"
-coreOffStatements = [
-    r"echo 0 | sudo tee /sys/devices/system/cpu/cpu{}/online".format(i) for i in range(cpu)]
-coreOnStatements = [
-    r"echo 1 | sudo tee /sys/devices/system/cpu/cpu{}/online".format(i) for i in range(cpu)]
+coreOffStatements = [r"echo 0 | sudo tee /sys/devices/system/cpu/cpu{}/online".format(i) for i in range(cpu)]
+coreOnStatements = [r"echo 1 | sudo tee /sys/devices/system/cpu/cpu{}/online".format(i) for i in range(cpu)]
 
 
 class Lat(object):
     def __init__(self, fileName):
         f = open(fileName, 'rb')
         a = np.fromfile(f, dtype=np.uint64)
-        self.reqTimes = a.reshape((a.shape[0]/3, 3))
+        self.reqTimes = a.reshape((a.shape[0] // 3, 3))
         f.close()
 
     def parseQueueTimes(self):
@@ -46,10 +44,10 @@ def getLatPct(latsFile):
 
     latsObj = Lat(latsFile)
     temp_cpu = multiprocessing.cpu_count()
-    qTimes = [l/1e6 for l in latsObj.parseQueueTimes()]
-    svcTimes = [l/1e6 for l in latsObj.parseSvcTimes()]
-    sjrnTimes = [l/1e6 for l in latsObj.parseSojournTimes()]
-    f = open('lats-{}-{}-{}.txt'.format(latsFile[3:-9], temp_cpu, ram), 'w')
+    qTimes = [l / 1e6 for l in latsObj.parseQueueTimes()]
+    svcTimes = [l / 1e6 for l in latsObj.parseSvcTimes()]
+    sjrnTimes = [l / 1e6 for l in latsObj.parseSojournTimes()]
+    f = open('output/lats-{}-{}-{}.txt'.format(latsFile[3:-9], temp_cpu, ram), 'w')
     f.write('%12s | %12s | %12s\n\n'
             % ('QueueTimes', 'ServiceTimes', 'SojournTimes'))
 
@@ -58,15 +56,14 @@ def getLatPct(latsFile):
                 % ('%.3f' % q, '%.3f' % svc, '%.3f' % sjrn))
     f.close()
 
-    f = open('{}-{}-{}.txt'.format(latsFile[3:-9], temp_cpu, ram), 'w')
+    f = open('output/{}-{}-{}.txt'.format(latsFile[3:-9], temp_cpu, ram), 'w')
     for i in sjrnTimes:
         f.write('%.3f\n' % i)
     f.close()
 
     p95 = stats.scoreatpercentile(sjrnTimes, 95)
     maxLat = max(sjrnTimes)
-    print "95th percentile latency %.3f ms | max latency %.3f ms" \
-        % (p95, maxLat)
+    print("95th percentile latency %.3f ms | max latency %.3f ms" % (p95, maxLat))
 
 
 def build():
@@ -75,37 +72,34 @@ def build():
         print(e)
         os.system(e)
 
-def switchOn():
-    for e in coreOnStatements:
-        os.system(e)
 
 def run():
     print("Executing...")
-    switchOn()
+    for e in coreOnStatements:
+        os.system(e)
     ctr = cpu
+
     params = sys.argv[1:]
     params.sort()
-    applications = params[params.index('-e')+1:]
+    applications = params[params.index('-e') + 1:]
     for app in applications:
-        switchOn()
-        ctr = cpu
-        #if app == 'sphinx':
-        #    os.system(r"(sudo chmod +x ../convert.sh; sudo ../convert.sh)")
         while ctr >= 1:
-            print ctr, "cores..."
+            print(ctr, "cores...")
             runStatement = executeStatement.format(
-                app, app+'-'+str(ctr)+'-'+str(ram))
+                app, app + '-' + str(ctr) + '-' + str(ram))
             print(runStatement)
-            #time.sleep(15)
+            time.sleep(15)
             os.system(runStatement)
             generate()
-            os.system(coreOffStatements[ctr-1])
-            os.system(coreOffStatements[ctr-2])
-            os.system(coreOffStatements[ctr-3])
-            os.system(coreOffStatements[ctr-4])
+            os.system(coreOffStatements[ctr - 1])
+            os.system(coreOffStatements[ctr - 2])
+            os.system(coreOffStatements[ctr - 3])
+            os.system(coreOffStatements[ctr - 4])
             ctr -= 4
 
-    switchOn()
+    for e in coreOnStatements:
+        os.system(e)
+
 
 def generate():
     print("Generating Output Files...")
@@ -122,3 +116,5 @@ for parameter in params:
         build()
     if parameter == '-e':
         run()
+    if parameter == "-o":
+        generate()

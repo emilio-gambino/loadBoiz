@@ -5,7 +5,7 @@ CFLAGS = -g -W -Wall -O3
 DEPSDIR := .deps
 DEPCFLAGS = -MD -MF $(DEPSDIR)/$*.d -MP
 ifeq ($(strip $(MEMMGR)), )
-  MEMMGR = -ljemalloc
+  MEMMGR = 
 endif
 ifneq ($(strip $(KEYSWAP)), )
   CFLAGS += -DKEYSWAP
@@ -73,7 +73,7 @@ configure config.h.in: configure.ac
 	touch config.h.in
 
 config.status: configure
-	./configure  '--enable-max-key-len=1024' '--disable-assertions' '--disable-invariants' '--disable-preconditions' '--with-malloc=jemalloc'
+	./configure  '--enable-max-key-len=1024' '--disable-assertions' '--disable-invariants' '--disable-preconditions' '--with-malloc=malloc'
 
 $(DEPSDIR)/stamp:
 	mkdir -p $(DEPSDIR)
