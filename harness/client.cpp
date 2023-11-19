@@ -65,6 +65,7 @@ Request *Client::startReq() {
         pthread_barrier_wait(&barrier); // Wait for all threads to start up
 
         pthread_mutex_lock(&lock);
+        std::cout << "INITIALIZING DISTRIB " << std::endl;
 
         if (!dist) {
             uint64_t curNs = getCurNs();

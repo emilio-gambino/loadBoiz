@@ -5,7 +5,7 @@ ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 if [[ $# -eq 0 ]]
 then
     HARNESS_DIR=harness
-    APP_DIRS="masstree shore silo"
+    APP_DIRS="silo"
 else
     APP_DIRS=$@
 fi
@@ -14,7 +14,7 @@ for dir in ${HARNESS_DIR} ${APP_DIRS}
 do
     echo "Cleaning $dir"
     cd ${ROOT}/${dir}
-    ./clean.sh > clean.log
+    ./clean.sh 
     EXIT_CODE=$?
     if [[ $EXIT_CODE -ne 0 ]]
     then

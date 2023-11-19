@@ -104,6 +104,7 @@ static event_avg_counter evt_avg_abort_spins("avg_abort_spins");
 
 void
 bench_worker::run() {
+    std::cout << "STARTING WORKER" << std::endl;
     // XXX(stephentu): so many nasty hacks here. should actually
     // fix some of this stuff one day
     if (set_core_id)

@@ -42,27 +42,26 @@
 /*******************************************************************************
  * IntegratedServer
  *******************************************************************************/
-IntegratedServer::IntegratedServer(int nthreads) 
-    : Server(nthreads)
-    , Client(nthreads)
-{ }
+IntegratedServer::IntegratedServer(int nthreads) :
+        Server(nthreads),
+        Client(nthreads) {}
 
-size_t IntegratedServer::recvReq(int id, void** data) {
-    Request* req = Client::startReq();
-    *data = reinterpret_cast<void*>(&req->data);
+size_t IntegratedServer::recvReq(int id, void **data) {
+    Request *req = Client::startReq();
+    *data = reinterpret_cast<void *>(&req->data);
     uint64_t curNs = getCurNs();
     reqInfo[id].id = req->id;
     reqInfo[id].startNs = curNs;
     return req->len;
 };
 
-void IntegratedServer::sendResp(int id, const void* data, size_t len) {
-    Response* resp = new Response();
-    
+void IntegratedServer::sendResp(int id, const void *data, size_t len) {
+    Response *resp = new Response();
+
     resp->type = RESPONSE;
     resp->id = reqInfo[id].id;
     resp->len = len;
-    memcpy(reinterpret_cast<void*>(&resp->data), data, len);
+    memcpy(reinterpret_cast<void *>(&resp->data), data, len);
 
     uint64_t curNs = getCurNs();
     assert(curNs > reqInfo[id].startNs);
@@ -75,7 +74,7 @@ void IntegratedServer::sendResp(int id, const void* data, size_t len) {
 
     pthread_mutex_lock(&lock);
     ++finishedReqs;
-    
+
     if (finishedReqs == warmupReqs) {
         Client::_startRoi();
     } else if (finishedReqs == warmupReqs + maxReqs) {
@@ -96,7 +95,7 @@ __thread int tid;
  * Global data
  *******************************************************************************/
 std::atomic_int curTid;
-IntegratedServer* server;
+IntegratedServer *server;
 
 /*******************************************************************************
  * API
@@ -114,11 +113,11 @@ void tBenchServerFinish() {
     server->dumpStats();
 }
 
-size_t tBenchRecvReq(void** data) {
+size_t tBenchRecvReq(void **data) {
     return server->recvReq(tid, data);
 }
 
-void tBenchSendResp(const void* data, size_t size) {
+void tBenchSendResp(const void *data, size_t size) {
     return server->sendResp(tid, data, size);
 }
 
