@@ -103,12 +103,11 @@ static event_avg_counter evt_avg_abort_spins("avg_abort_spins");
 void
 bench_worker::run() {
     std::cout << "STARTING WORKER" << std::endl;
-    // XXX(stephentu): so many nasty hacks here. should actually
-    // fix some of this stuff one day
+
     if (set_core_id)
-        coreid::set_core_id(worker_id); // cringe
+        coreid::set_core_id(worker_id);
     {
-        scoped_rcu_region r; // register this thread in rcu region
+        scoped_rcu_region r;
     }
     on_run_setup();
     scoped_db_thread_ctx ctx(db, false);
@@ -122,6 +121,7 @@ bench_worker::run() {
     while (running && ntxn_commits < ops_per_worker) {
         Request *req;
         tBenchRecvReq(reinterpret_cast<void **>(&req));
+        ReqType type = req->type;
         Response resp;
         retry:
         timer t;
@@ -152,7 +152,8 @@ bench_worker::run() {
             }
         }
         size_delta += ret.second; // should be zero on abort
-        //txn_counts[req->type]++; // txn_counts aren't used to compute throughput (is
+        txn_counts[type]++;
+        // txn_counts aren't used to compute throughput (is
         // just an informative number to print to the console
         // in verbose mode)
     }
@@ -169,11 +170,11 @@ bench_runner::run() {
         const pair<uint64_t, uint64_t> mem_info_before = get_system_memory_info();
         {
             scoped_timer t("dataloading", verbose);
-            for (auto loader : loaders) {
+            for (auto loader: loaders) {
                 loader->set_barrier(b);
                 loader->start();
             }
-            for (auto loader : loaders)
+            for (auto loader: loaders)
                 loader->join();
         }
         const pair<uint64_t, uint64_t> mem_info_after = get_system_memory_info();
@@ -210,7 +211,7 @@ bench_runner::run() {
 
     map<string, size_t> table_sizes_before;
     if (verbose) {
-        for (auto & open_table : open_tables) {
+        for (auto &open_table: open_tables) {
             scoped_rcu_region guard;
             const size_t s = open_table.second->size();
             cerr << "table " << open_table.first << " size " << s << endl;
@@ -223,7 +224,7 @@ bench_runner::run() {
 
     const vector<bench_worker *> workers = make_workers();
     ALWAYS_ASSERT(!workers.empty());
-    for (auto worker : workers)
+    for (auto worker: workers)
         worker->start();
 
     barrier_a.wait_for(); // wait for all threads to start up
@@ -233,9 +234,10 @@ bench_runner::run() {
     // ----------------------------------------------------
     // TODO here is the logic to stop the workload when we have converged
     bool converged = false;
-    if (converged) {
+    /*while (!converged) {
+        // Logic for convergence here
         running = false;
-    }
+    }*/
     // ----------------------------------------------------
 
     __sync_synchronize();

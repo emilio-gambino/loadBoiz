@@ -193,7 +193,7 @@ protected:
   inline ALWAYS_INLINE void measure_txn_counters(void *txn, const char *txn_name) {}
 #endif
 
-  std::vector<size_t> txn_counts; // breakdown of txns
+  std::vector<size_t> txn_counts{}; // breakdown of txns
   ssize_t size_delta; // how many logical bytes (of values) did the worker add to the DB
 
   std::string txn_obj_buf;
