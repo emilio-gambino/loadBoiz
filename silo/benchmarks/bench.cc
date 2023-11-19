@@ -37,9 +37,7 @@ volatile bool running = true;
 int verbose = 0;
 uint64_t txn_flags = 0;
 double scale_factor = 1.0;
-uint64_t runtime = 30;
-uint64_t ops_per_worker = 0;
-int run_mode = RUNMODE_TIME;
+uint64_t ops_per_worker = 1000; // TODO remove this
 int enable_parallel_loading = false;
 int pin_cpus = 0;
 int slow_exit = 0;
@@ -121,7 +119,7 @@ bench_worker::run() {
 
     tBenchServerThreadStart();
 
-    while (running && (run_mode != RUNMODE_OPS || ntxn_commits < ops_per_worker)) {
+    while (running && ntxn_commits < ops_per_worker) {
         Request *req;
         tBenchRecvReq(reinterpret_cast<void **>(&req));
         Response resp;
@@ -231,10 +229,15 @@ bench_runner::run() {
     barrier_a.wait_for(); // wait for all threads to start up
     timer t, t_nosync;
     barrier_b.count_down(); // bombs away!
-    if (run_mode == RUNMODE_TIME) {
-        sleep(runtime);
+
+    // ----------------------------------------------------
+    // TODO here is the logic to stop the workload when we have converged
+    bool converged = false;
+    if (converged) {
         running = false;
     }
+    // ----------------------------------------------------
+
     __sync_synchronize();
     for (size_t i = 0; i < nthreads; i++)
         workers[i]->join();
