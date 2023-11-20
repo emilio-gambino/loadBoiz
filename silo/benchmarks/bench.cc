@@ -28,6 +28,7 @@ extern "C" int mallctl(const char *name, void *oldp, size_t *oldlenp, void *newp
 
 #include "request.h"
 #include "tbench_server.h"
+#include "helpers.h"
 
 using namespace std;
 using namespace util;
@@ -100,6 +101,8 @@ write_cb(void *p, const char *s) {
 
 static event_avg_counter evt_avg_abort_spins("avg_abort_spins");
 
+extern void Client_changeDistribution(const double lambda);
+
 void
 bench_worker::run() {
     std::cout << "Starting Worker" << std::endl;
@@ -117,6 +120,10 @@ bench_worker::run() {
     barrier_b->wait_for();
 
     tBenchServerThreadStart();
+
+    // Example of changing the distribution of all clients.
+    const double baseLambda = getOpt<double>("TBENCH_QPS", 1000.0) * 1e-9;
+    Client_changeDistribution(baseLambda);
 
     int count = 0;
 
