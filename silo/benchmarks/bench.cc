@@ -123,6 +123,9 @@ bench_worker::run() {
 
     int count = 0;
 
+    bool changed = false; // TODO remove
+    std::vector<float> accumulator;
+
     while (running) {
         while (ntxn_commits < ops_per_worker) {
             Request *req;
@@ -161,44 +164,39 @@ bench_worker::run() {
             txn_counts[type]++;
         }
 
-        float percentile = 95.0;                             // TODO: hardcoded
+        float percentile = 99.0;                             // TODO: hardcoded
         float latency = tBenchServerDumpLatency(percentile);
         tail_latencies.push_back(latency);
+
         std::cout << "Latency : " << latency << std::endl;
+        accumulator.push_back(latency);
+        tail_latencies.clear();
 
-        // logic for convergence
-        size_t n = tail_latencies.size();
-        float mean = 0.0;
-        for (const auto &lat: tail_latencies) {
-            mean += lat;
-        }
-        mean /= n;
-
-        std::cout << "Mean :" << mean << std::endl;
-
-        /* float variance = 0.0;
-        for (const auto &latency: tail_latencies) {
-            variance += pow(latency - mean, 2);
-        }
-        variance /= n;
-        float std_dev = sqrt(variance);
-        cout << "\tmean: " << mean << endl;
-        cout << "\tstd_dev: " << std_dev << endl;*/
-
-        if (count > 5) {
-            int QPS = 7000;
+        if (count > 30 && !changed) {
+            int QPS = 13000;
             Client_changeDistribution(QPS);
+            changed = true;
         }
 
         // TODO reset state, ex ntx_commit
         ntxn_commits = 0;
-        std::cout << "Finished iteration !" << endl;
-        if (count > 20) {
+        //std::cout << "Finished iteration !" << endl;
+        if (count > 80) {
             // TODO make a change in QPS -> change startReq from client.cpp
             running = false;
             // TODO reset count to reiterate
         }
         ++count;
+    }
+    std::ofstream outputFile("../output/output.txt");
+    if (outputFile.is_open()) {
+        for (size_t i = 0; i < accumulator.size(); ++i) {
+            outputFile << accumulator[i];
+            outputFile << "\n";
+        }
+        outputFile.close();
+    } else {
+        std::cout << "CANNOT OPEN FILE" << std::endl;
     }
 }
 
@@ -268,7 +266,7 @@ bench_runner::run() {
     // ------------------------------------------------------------------
 
     // TODO here we need to determine the sample size for accurate tail latency measurement
-    ops_per_worker = 10000;
+    ops_per_worker = 7000;
     // in the beginning fixed size, later depending on observed variance
 
     const vector<bench_worker *> workers = make_workers();
