@@ -161,11 +161,10 @@ void Client::dumpStats() {
 
 // input float percentile : a number between 1 and 100
 float Client::dumpLatency(float percentile) { // should take percentile as input
-    // TODO
-    // compute 95th percentile latency
-    // clear sjrn times and other for new iterations etc
-    // return latency
-    return 0;
+    sort(queueTimes.begin(), queueTimes.end());
+    uint64_t lat = queueTimes[(percentile / 100) * queueTimes.size()];
+    queueTimes.clear();    
+    return (float) lat;
 }
 
 /*******************************************************************************
