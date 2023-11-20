@@ -37,9 +37,7 @@ volatile bool running = true;
 int verbose = 0;
 uint64_t txn_flags = 0;
 double scale_factor = 1.0;
-uint64_t runtime = 30;
-uint64_t ops_per_worker = 0;
-int run_mode = RUNMODE_TIME;
+uint64_t ops_per_worker = 1000; // TODO remove this
 int enable_parallel_loading = false;
 int pin_cpus = 0;
 int slow_exit = 0;
@@ -104,13 +102,12 @@ static event_avg_counter evt_avg_abort_spins("avg_abort_spins");
 
 void
 bench_worker::run() {
-    std::cout << "STARTING WORKER" << std::endl;
-    // XXX(stephentu): so many nasty hacks here. should actually
-    // fix some of this stuff one day
+    std::cout << "Starting Worker" << std::endl;
+
     if (set_core_id)
-        coreid::set_core_id(worker_id); // cringe
+        coreid::set_core_id(worker_id);
     {
-        scoped_rcu_region r; // register this thread in rcu region
+        scoped_rcu_region r;
     }
     on_run_setup();
     scoped_db_thread_ctx ctx(db, false);
@@ -121,42 +118,60 @@ bench_worker::run() {
 
     tBenchServerThreadStart();
 
-    while (running && (run_mode != RUNMODE_OPS || ntxn_commits < ops_per_worker)) {
-        Request *req;
-        tBenchRecvReq(reinterpret_cast<void **>(&req));
-        Response resp;
-        retry:
-        timer t;
-        const unsigned long old_seed = r.get_seed();
-        const auto ret = workload[req->type].fn(this);
-        if (likely(ret.first)) {
-            ++ntxn_commits;
-            latency_numer_us += t.lap();
-            backoff_shifts >>= 1;
-            resp.success = true;
-            tBenchSendResp(&resp, sizeof(resp));
-        } else {
-            ++ntxn_aborts;
-            if (retry_aborted_transaction && running) {
-                if (backoff_aborted_transaction) {
-                    if (backoff_shifts < 63)
-                        backoff_shifts++;
-                    uint64_t spins = 1UL << backoff_shifts;
-                    spins *= 100; // XXX: tuned pretty arbitrarily
-                    evt_avg_abort_spins.offer(spins);
-                    while (spins) {
-                        nop_pause();
-                        spins--;
+    int count = 0;
+
+    while (running) {
+        while (ntxn_commits < ops_per_worker) {
+            Request *req;
+            tBenchRecvReq(reinterpret_cast<void **>(&req));
+            ReqType type = req->type;
+            Response resp;
+            retry:
+            timer t;
+            const unsigned long old_seed = r.get_seed();
+            const auto ret = workload[req->type].fn(this);
+            if (likely(ret.first)) {
+                ++ntxn_commits;
+                latency_numer_us += t.lap();
+                backoff_shifts >>= 1;
+                resp.success = true;
+                tBenchSendResp(&resp, sizeof(resp));
+            } else {
+                ++ntxn_aborts;
+                if (retry_aborted_transaction && running) {
+                    if (backoff_aborted_transaction) {
+                        if (backoff_shifts < 63)
+                            backoff_shifts++;
+                        uint64_t spins = 1UL << backoff_shifts;
+                        spins *= 100; // XXX: tuned pretty arbitrarily
+                        evt_avg_abort_spins.offer(spins);
+                        while (spins) {
+                            nop_pause();
+                            spins--;
+                        }
                     }
+                    r.set_seed(old_seed);
+                    goto retry;
                 }
-                r.set_seed(old_seed);
-                goto retry;
             }
+            size_delta += ret.second; // should be zero on abort
+            txn_counts[type]++;
         }
-        size_delta += ret.second; // should be zero on abort
-        //txn_counts[req->type]++; // txn_counts aren't used to compute throughput (is
-        // just an informative number to print to the console
-        // in verbose mode)
+
+        float percentile = 95.0;
+        float latency = tBenchServerDumpLatency(percentile); // TODO get latency
+
+        // TODO logic for convergence here
+
+        // TODO reset state, ex ntx_commit
+        ntxn_commits = 0;
+        std::cout << "Finished iteration !" << endl;
+        if (count > 2) {
+            // TODO make a change in QPS -> change startReq from client.cpp
+            running = false;
+            // TODO reset count to reiterate
+        }
+        ++count;
     }
 }
 
@@ -171,11 +186,11 @@ bench_runner::run() {
         const pair<uint64_t, uint64_t> mem_info_before = get_system_memory_info();
         {
             scoped_timer t("dataloading", verbose);
-            for (auto loader : loaders) {
+            for (auto loader: loaders) {
                 loader->set_barrier(b);
                 loader->start();
             }
-            for (auto loader : loaders)
+            for (auto loader: loaders)
                 loader->join();
         }
         const pair<uint64_t, uint64_t> mem_info_after = get_system_memory_info();
@@ -212,7 +227,7 @@ bench_runner::run() {
 
     map<string, size_t> table_sizes_before;
     if (verbose) {
-        for (auto & open_table : open_tables) {
+        for (auto &open_table: open_tables) {
             scoped_rcu_region guard;
             const size_t s = open_table.second->size();
             cerr << "table " << open_table.first << " size " << s << endl;
@@ -223,18 +238,27 @@ bench_runner::run() {
 
     const pair<uint64_t, uint64_t> mem_info_before = get_system_memory_info();
 
+    // ------------------------------------------------------------------
+
+    // TODO here we need to determine the sample size for accurate tail latency measurement
+    ops_per_worker = 1000;
+    // in the beginning fixed size, later depending on observed variance
+
     const vector<bench_worker *> workers = make_workers();
     ALWAYS_ASSERT(!workers.empty());
-    for (auto worker : workers)
+    for (auto worker: workers)
         worker->start();
 
     barrier_a.wait_for(); // wait for all threads to start up
     timer t, t_nosync;
     barrier_b.count_down(); // bombs away!
-    if (run_mode == RUNMODE_TIME) {
-        sleep(runtime);
-        running = false;
-    }
+
+    // TODO
+    // ---------------
+    // running = false;
+    // logic block for convergence?
+    // ---------------
+
     __sync_synchronize();
     for (size_t i = 0; i < nthreads; i++)
         workers[i]->join();
@@ -255,6 +279,18 @@ bench_runner::run() {
     // waits a bit
 
     tBenchServerFinish();
+    // float curr_latency = parse_latencies(percentile); // TODO
+    // bool converged = latency_convergence(prev_latency, curr_latency, confidence_interval);
+    // if (converged && curr_latency < latency_requirement) {
+    //      increase_load();
+    //      continue;
+    // } else if (converged && curr_latency > latency_requirement) {
+    //      return prev_latency;
+    // }
+    // TODO we then decided if we increase workload or not
+    // TODO here is the logic to stop the workload when we have converged
+    // ------------------------------------------------------------------
+
 
     // various sanity checks
     ALWAYS_ASSERT(get<0>(persisted_info) == get<1>(persisted_info));
@@ -374,7 +410,7 @@ bench_runner::run() {
     open_tables.clear();
 
     delete_pointers(loaders);
-    delete_pointers(workers);
+    delete_pointers(workers); // moved up in loop
 }
 
 template<typename K, typename V>

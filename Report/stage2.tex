@@ -3,6 +3,8 @@
 \usepackage[all]{xy}
 \usepackage{setspace}
 \usepackage{float}
+\usepackage{algorithm}
+\usepackage{algcompatible}
 \usepackage{enumitem}
 %\usepackage{biblatex}
 \author{
@@ -43,7 +45,7 @@ We shortly remind here the previous status of the project at the end of the stag
 
 \section{Updated Research Problem}
 
-We continue to try to solve the same problem, and maintain the same hypothesis. However we have completely changed our proposed solution and abandoned the factor analysis. Here are a few reasons why we have decided to change:
+\textit{Hypothesis:} We continue our attempt to solve this problem by maintaining the same hypothesis, which we believe to be true. However we have completely changed our proposed solution and abandoned the factor analysis. Here are a few reasons why we have decided to change:
 
 \begin{enumerate}
 	\item Factor analysis is a much harder problem than what is necessary for our purpose. It requires understanding exactly from where the latency is coming from, proper modeling and precise measurement of each factor during execution. This is an entirely new research problem, and although interesting, it is beyond the scope of our project.
@@ -51,7 +53,7 @@ We continue to try to solve the same problem, and maintain the same hypothesis. 
 	\item We can achieve the same result with a simpler approach, which detail below.
 \end{enumerate}
 
-\noindent \textit{New Solution:} Based on our stated hypothesis, we already assume that the variance goes through a transient phase until it eventually converges to its inherent value. We can therefore detect the point at which the transient latency has settled down by experimentally looking at the convergence rate of the latency. We can see this effect in Figure 1.
+\noindent \textit{New Solution:} Based on our stated hypothesis, we already assume that the variance goes through a transient phase until it eventually converges to its inherent value. We can therefore detect the point at which the transient latency has settled down by experimentally looking at the convergence rate of the latency. Figure 1 shows what this behavior would look like, and we expect to find similar effects in latency measurements. 
 
 \clearpage
 \begin{figure}[H]
@@ -72,67 +74,104 @@ We continue to try to solve the same problem, and maintain the same hypothesis. 
 
 \section{Questions, Hypotheses and Test}
 
-\textit{Hypothesis:} Although we have abandoned factor analysis, we persist with the same hypothesis, which we believe to be valid. We however use a different method to achieve this goal.
-
+In this section, we discuss the new theoretical questions which are raised by our new approach. In the next section, we will give more information as to where each of those questions fit into the global picture.
 \singlespacing
 
-\noindent \textit{Questions:} There are two main theoretical problems which we need to solve.
 
-\singlespacing 
+\noindent \textit{Questions:} Here are the new theoretical issues which we are currently working on: 
 
-What interval to precisely measure the distribution ? Provided tools enable to accurately measure latency for a given number of samples, however in our case that number of samples is undefined.
+\begin{enumerate}
+	\item \textit{Sampling Interval}: When evaluating a workload, we perform a set number of operations over which we then measure latency for this period. However, there are no simple solutions to determine how long this sampling period should be in order to guarantee that our measurement is accurate enough. There are multiple parameters which we should take into account to determine this window:
+		\begin{enumerate}
+			\item Accuracy \& Confidence Intervals: How accurately do we want to estimate latency? How much certainty do we want about our measure ? More accuracy and certainty imply larger sampling windows.
+			\item Variability: How variable is the metric that we are observing ? Greater variability implies more samples for accurate estimation.
+			\item Effect Size: How large is the effect size that we are measuring ? Accurately measuring small changes require more samples.
+			\item Time Homogeneity: How to correctly sample a distribution which changes over time ? This will affect the different sampling windows that we consider for measurement.
+		\end{enumerate}
 
+		We are still looking into different statistical tools, such as Power Analysis, which enable us determine sampling size when considering all those factors. Since we still have not yet figured out a full solution, we have used a fixed sampling window size when performing our measurements.
 
-What interval until we have converged to the inherent distribution ?
+	\item \textit{Convergence Detection}: There are two levels at which we need to detect convergence:
+		\begin{enumerate}[label=2.\arabic*.]
+			\item At each iteration: When do we decide that we have converged to inherent latency? If we are above the tail latency requirement we may have to decrease load again, but we must first be sure that we have actually converged.
+			\item Across iterations: When do we decide that we have found a global maximum and output a result ? We may oscillate around the optimum for many iterations.
+		\end{enumerate}
 
-The tools to measure latency assume a constant distribution
+	\item \textit{Workload Increase Step Size}: When we decide to increase workload, by how much should we increase it ?
 
-\noindent 1. Since we are continuously evaluating our model, at any given time, we need to determine how large should our samples should be for accurate latency measurement.
+	\item \textit{Hysteresis}: When evaluating complex systems, even with proper methodology and the correct amount of samples, two different runs might converge to different values. This is a difficult problem to address, and we will first try to optimize for a single run, before trying to optimize across runs.
+\end{enumerate}
 
-• New questions, for instance, anomalies encountered during experiments or literature review.
-\singlespacing
-
-\noindent \textit{Testing:} There are two main theoretical problems which we need to solve.
-
-• Methodology details, including machine configuration, software usage, and benchmarks to be conducted.
-
-We have chosen the silo workload
+\noindent \textit{Testing:} Concerning the test of our hypothesis, we will give more details in the following section. For the theoretical issues mentioned above, we first need to ensure that our mathematical derivations are rigorous, then we need test our code implementations and finally we can run the workloads and experimentally tune the parameters, ex: confidence interval size, for best results. As a reference, we can compare the output of our solution with the results given in the Tailbench paper.
 
 \section{Progress, Result and Analysis}
 
-Results may vary with the type of research question. Below are suggestions for a given type of research question:
+\textit{Experimental Setup}: In order to test our hypothesis, we used the code provided by the Tailbench testing suite. For reasons detailed in the "Challenges" section, we decided to use Silo, an OLTP database, with a TPC-C benchmark. We ran our experiment in integrated configuration, i.e. all operations happen in memory (no disk, no network access), with a single thread and a single warehouse.
+
+\singlespacing
+\noindent \textit{Hypothesis test}:
+\noindent Here is the results that we obtained
+
+Mashallah on trouve ce qu'il faut
+
+Now that we have a good reason to believe that our hypothesis is correct, we propose an algorithm which exploits this hypothesis in order to solve our problem.
 
 • Metric Modeling: Include your model, analysis steps, experimental validation results, and error analysis.
 
 • Solution Proposal: Test results supporting your design decisions.
+\singlespacing
 
-• Result Reproduction: Experimental findings and comparisons with previous studies.
+\noindent \textit{Algorithm Design}: We now give the algorithm that we have designed in order to maximize throughput within tail latency constraints. The numbers on the right indicate to which theoretical problem each method corresponds to.
 
-• Workload Characterization: Measurements of metrics.
+\begin{algorithm}
+	\caption{Load-Aware Load Generator}\label{alg:cap}
+	\begin{algorithmic}[1]
+		\STATE Initialize workload data structures
+		\STATE running $\gets$ true
+		\WHILE{running}
+		\STATE num\_requests $\gets$ find\_sampling\_window() \hfill Problem 1.
+		\STATE run\_workload(num\_requests)
+		\STATE latency $\gets$ aggregate\_latencies()
+		\STATE converged $\gets$ latency\_convergence(latency, confidence\_interval) \hfill Problem 2.1
+		\IF{converged}
+		\IF{ global\_convergence(latency, latency\_requirement)} \hfill Problem 2.2
+		\STATE \textbf{return} (load, latency) 
+		\ELSIF{latency $>$ latency\_requirement}
+		\STATE increase\_load() \hfill Problem 3.
+		\ELSIF{latency $<$ latency\_requirement}
+		\STATE decrease\_load()\hfill Problem 3.
+		\ENDIF
+		\ENDIF
+		\ENDWHILE
+	\end{algorithmic}
+\end{algorithm}
 
-• Methodology Examination: Comparative measurements using different methodologies.
+\noindent In our current implementation, we have simplified each sub-problem in order to be able to make first measurements for our hypothesis test. Improving this algorithm will be the next focus of our project.
 
 \singlespacing
-Detail the algorithm for throughput maximization
+
 
 \section{Challenges}
 
-Segmentation faults, huge codebase which is not up to date, does not compile out of the box, when it does compile, segmentation faults which need to be fixed with GDB.
+We encountered many unexpected practical challenges when trying to verify our hypothesis. The first one is working with the Tailbench repository code. The Tailbench suite uses Harness, a tail latency measurement software, to run multiple different benchmarks which have been adapted for this purpose. Both the Harness code and the benchmarks have not been maintained for years, and come with multiple dependency problems, various compilation errors and segmentation faults which we had to debug with GDB.  Understanding and making changes to such a large codebase was tedious and time-consuming.
 
-Workload is not continuous - performance hysteresis
+\singlespacing
 
-• Difficulties encountered, whether in experimentation, data gathering, or literature review.
+\noindent Another challenge that we had was to adapt the way Tailbench performs latency measurements. Tailbench is designed to aggregate statistics about latencies during execution and then dump them into a binary file which we have to parse with a python script afterwards. This is unsuitable for our purpose, since we have to take decisions based on the latency during the execution. If we are not able to modify the workload and observe latency in live, then all of our analysis falls apart. We therefore had to modify the code in order to continuously iterate over a given workload and collect the associated latencies.
 
-• Assistance requests for your project.
 \section{Plan}
 
-• Updates on team composition (e.g., team member changes).
+We do not have any team member changes. In terms of priority, now that we have verified our hypothesis, we can move on to the next step which means: finishing our algorithm implementation, experimenting with different solutions for the theoretical problems, and evaluating them on our benchmark. Our schedule now reflects those objectives.
 
-• Reprioritization of questions, hypotheses, and tests.
+\section{TLDR}
 
-• Schedule adjustments (compared to the initial proposal).
+\textit{Research}: We have not changed our goal or hypothesis. We have changed our approach. Now we treat our system as a blackbox and only measure latency.
 
-• Updates on the final goal (compared to the initial proposal).
+\singlespacing
+\noindent \textit{Progress}: We have tested our initial hypothesis, it works. We have implemented a simple algorithm based on that. A few theoretical questions remain to improve the algorithm.
+
+\singlespacing
+\noindent \textit{Next steps}: Implement different solutions to the problem, evaluate them.
 
 
 %\bibliographystyle{IEEEtran}

@@ -121,3 +121,7 @@ void tBenchSendResp(const void *data, size_t size) {
     return server->sendResp(tid, data, size);
 }
 
+float tBenchServerDumpLatency(float percentile) {
+    return server->dumpLatency(percentile);
+}
+

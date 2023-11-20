@@ -159,6 +159,15 @@ void Client::dumpStats() {
     out.close();
 }
 
+// input float percentile : a number between 1 and 100
+float Client::dumpLatency(float percentile) { // should take percentile as input
+    // TODO
+    // compute 95th percentile latency
+    // clear sjrn times and other for new iterations etc
+    // return latency
+    return 0;
+}
+
 /*******************************************************************************
  * Networked Client
  *******************************************************************************/

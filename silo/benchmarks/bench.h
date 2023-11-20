@@ -21,20 +21,13 @@ extern void queue_do_test(abstract_db *db, int argc, char **argv);
 extern void encstress_do_test(abstract_db *db, int argc, char **argv);
 extern void bid_do_test(abstract_db *db, int argc, char **argv);
 
-enum {
-  RUNMODE_TIME = 0,
-  RUNMODE_OPS  = 1
-};
-
 // benchmark global variables
 extern size_t nthreads;
 extern volatile bool running;
 extern int verbose;
 extern uint64_t txn_flags;
 extern double scale_factor;
-extern uint64_t runtime;
 extern uint64_t ops_per_worker;
-extern int run_mode;
 extern int enable_parallel_loading;
 extern int pin_cpus;
 extern int slow_exit;
@@ -200,7 +193,7 @@ protected:
   inline ALWAYS_INLINE void measure_txn_counters(void *txn, const char *txn_name) {}
 #endif
 
-  std::vector<size_t> txn_counts; // breakdown of txns
+  std::vector<size_t> txn_counts{}; // breakdown of txns
   ssize_t size_delta; // how many logical bytes (of values) did the worker add to the DB
 
   std::string txn_obj_buf;

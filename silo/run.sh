@@ -10,8 +10,8 @@ MAXREQS=200000
 WARMUPREQS=100 # Must be > 0
 
 TBENCH_QPS=${QPS} TBENCH_MAXREQS=${MAXREQS} TBENCH_WARMUPREQS=${WARMUPREQS} TBENCH_MINSLEEPNS=10000 TBENCH_RANDSEED=0 ./out-perf.masstree/benchmarks/dbtest_integrated --verbose \
-    --bench tpcc --num-threads ${NUM_THREADS} --scale-factor ${NUM_WAREHOUSES} \
-    --ops-per-worker 1000
+    --bench tpcc --num-threads ${NUM_THREADS} --scale-factor ${NUM_WAREHOUSES}
+    
 
 
 #TBENCH_QPS=${QPS} TBENCH_MAXREQS=${MAXREQS} TBENCH_WARMUPREQS=${WARMUPREQS} \
