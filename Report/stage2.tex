@@ -137,9 +137,9 @@ In this section, we discuss the new theoretical questions which are raised by ou
 		\IF{converged}
 		\IF{ global\_convergence(latency, latency\_requirement)} \hfill Problem 2.2
 		\STATE \textbf{return} (load, latency) 
-		\ELSIF{latency $>$ latency\_requirement}
-		\STATE increase\_load() \hfill Problem 3.
 		\ELSIF{latency $<$ latency\_requirement}
+		\STATE increase\_load() \hfill Problem 3.
+		\ELSIF{latency $>$ latency\_requirement}
 		\STATE decrease\_load()\hfill Problem 3.
 		\ENDIF
 		\ENDIF
