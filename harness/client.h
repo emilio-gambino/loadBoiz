@@ -18,7 +18,6 @@
 #define __CLIENT_H
 
 #include "msgs.h"
-#include "msgs.h"
 #include "dist.h"
 
 #include <pthread.h>
@@ -61,6 +60,18 @@ class Client {
         void startRoi();
         void dumpStats();
         float dumpLatency(float percentile);
+
+
+// ######################################################################
+// ###              LOADBOIZ begin change
+    public:
+        /* Changes the distribution of all clients. */
+        static void changeDistribution(const int QPS);
+    protected:
+        void overrideIfDirty();
+        static double lambda_override;
+// ###              LOADBOIZ end change
+// ######################################################################
 };
 
 class NetworkedClient : public Client {

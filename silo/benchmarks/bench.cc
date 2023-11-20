@@ -101,6 +101,8 @@ write_cb(void *p, const char *s) {
 
 static event_avg_counter evt_avg_abort_spins("avg_abort_spins");
 
+extern void Client_changeDistribution(const int QPS);
+
 void
 bench_worker::run() {
     std::cout << "Starting Worker" << std::endl;
@@ -183,10 +185,15 @@ bench_worker::run() {
         cout << "\tmean: " << mean << endl;
         cout << "\tstd_dev: " << std_dev << endl;*/
 
+        if (count > 5) {
+            int QPS = 7000;
+            Client_changeDistribution(QPS);
+        }
+
         // TODO reset state, ex ntx_commit
         ntxn_commits = 0;
         std::cout << "Finished iteration !" << endl;
-        if (count > 4) {
+        if (count > 20) {
             // TODO make a change in QPS -> change startReq from client.cpp
             running = false;
             // TODO reset count to reiterate

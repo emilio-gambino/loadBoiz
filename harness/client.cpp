@@ -41,6 +41,40 @@
  * Client
  *******************************************************************************/
 
+// ######################################################################
+// ###              LOADBOIZ begin change
+
+// Workaround to not include client.h as they define the same struct in bench.h and msg.h with
+// different members.
+void Client_changeDistribution(const int QPS) {
+    Client::changeDistribution(QPS);
+}
+
+double Client::lambda_override; // Set in constructor
+
+void Client::changeDistribution(const int QPS) {
+    lambda_override = QPS * 1e-9;
+}
+
+void Client::overrideIfDirty() {
+    const bool bDirty = lambda != lambda_override;
+    if (bDirty) {
+        const uint64_t curNs = getCurNs();
+
+        lambda = lambda_override;
+
+        if (dist) {
+            delete dist;
+            dist = nullptr;
+        }
+
+        dist = new ExpDist(lambda, seed, curNs);
+        std::cout << "Changing QPS to: " << lambda * 1e9 << std::endl;
+    }
+}
+// ###              LOADBOIZ end change
+// ######################################################################
+
 Client::Client(int _nthreads) {
     status = INIT;
 
@@ -51,6 +85,7 @@ Client::Client(int _nthreads) {
     minSleepNs = getOpt("TBENCH_MINSLEEPNS", 0);
     seed = getOpt("TBENCH_RANDSEED", 0);
     lambda = getOpt<double>("TBENCH_QPS", 1000.0) * 1e-9;
+    lambda_override = lambda;
 
     dist = nullptr; // Will get initialized in startReq()
 
@@ -65,7 +100,6 @@ Request *Client::startReq() {
         pthread_barrier_wait(&barrier); // Wait for all threads to start up
 
         pthread_mutex_lock(&lock);
-        std::cout << "INITIALIZING DISTRIB " << std::endl;
 
         if (!dist) {
             uint64_t curNs = getCurNs();
@@ -83,6 +117,12 @@ Request *Client::startReq() {
     }
 
     pthread_mutex_lock(&lock);
+
+    // ######################################################################
+    // ###              LOADBOIZ begin change
+    overrideIfDirty();
+    // ###              LOADBOIZ end change
+    // ######################################################################
 
     Request *req = new Request();
     size_t len = tBenchClientGenReq(&req->data);
