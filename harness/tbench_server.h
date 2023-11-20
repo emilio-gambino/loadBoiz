@@ -19,7 +19,7 @@
 
 #include <stdlib.h>
 
-#ifdef __cplusplus 
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -29,11 +29,13 @@ void tBenchServerThreadStart();
 
 void tBenchServerFinish();
 
-size_t tBenchRecvReq(void** data);
+size_t tBenchRecvReq(void **data);
 
-void tBenchSendResp(const void* data, size_t size);
+void tBenchSendResp(const void *data, size_t size);
 
-#ifdef __cplusplus 
+float tBenchServerDumpLatency(float percentile);
+
+#ifdef __cplusplus
 }
 #endif
 

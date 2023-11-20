@@ -60,7 +60,7 @@ class Client {
 
         void startRoi();
         void dumpStats();
-
+        float dumpLatency(float percentile);
 };
 
 class NetworkedClient : public Client {
