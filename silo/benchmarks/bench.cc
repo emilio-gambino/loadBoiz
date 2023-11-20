@@ -182,10 +182,7 @@ bench_worker::run() {
 
         float percentile = 95.0;                             // TODO: hardcoded
         float latency = tBenchServerDumpLatency(percentile); // TODO get latency
-        
-        if (count > 2) {
-            tail_latencies.push_back(latency);
-        }
+        tail_latencies.push_back(latency);
 
         // logic for convergence
         size_t n = tail_latencies.size();
@@ -207,7 +204,7 @@ bench_worker::run() {
             variance /= n;
             float std_dev = sqrt(variance);
 
-            float threshold = 100; // TODO: hardcoded
+            float threshold = 0.1; // TODO: hardcoded
 
             // TODO reset state, ex ntx_commit
             ntxn_commits = 0;
