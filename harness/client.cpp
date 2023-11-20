@@ -41,39 +41,6 @@
  * Client
  *******************************************************************************/
 
-// ######################################################################
-// ###              LOADBOIZ begin change
-
-// Workaround to not include client.h as they define the same struct in bench.h and msg.h with
-// different members.
-void Client_changeDistribution(const double lambda) {
-    Client::changeDistribution(lambda);
-}
-
-double Client::lambda_override = 1e-6;
-
-void Client::changeDistribution(const double lambda) {
-    lambda_override = lambda;
-}
-
-void Client::overrideIfDirty() {
-    const bool bDirty = lambda != lambda_override;
-    if (bDirty) {
-        const uint64_t curNs = getCurNs();
-
-        lambda = lambda_override;
-
-        if (dist) {
-            delete dist;
-            dist = nullptr;
-        }
-
-        dist = new ExpDist(lambda, seed, curNs);
-    }
-}
-// ###              LOADBOIZ end change
-// ######################################################################
-
 Client::Client(int _nthreads) {
     status = INIT;
 
@@ -116,12 +83,6 @@ Request *Client::startReq() {
     }
 
     pthread_mutex_lock(&lock);
-
-    // ######################################################################
-    // ###              LOADBOIZ begin change
-    overrideIfDirty();
-    // ###              LOADBOIZ end change
-    // ######################################################################
 
     Request *req = new Request();
     size_t len = tBenchClientGenReq(&req->data);
