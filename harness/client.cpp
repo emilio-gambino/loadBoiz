@@ -46,7 +46,7 @@
 
 // Workaround to not include client.h as they define the same struct in bench.h and msg.h with
 // different members.
-void Client_changeDistribution(const double lambda) {
+extern "C" void Client_changeDistribution(const double lambda) {
     Client::changeDistribution(lambda);
 }
 
@@ -204,6 +204,13 @@ float Client::dumpLatency(float percentile) { // should take percentile as input
     // compute 95th percentile latency
     // clear sjrn times and other for new iterations etc
     // return latency
+    sort(sjrnTimes.begin(), sjrnTimes.end());
+    uint64_t lat = sjrnTimes[(percentile / 100) * sjrnTimes.size()];
+    sjrnTimes.clear();
+    // TODO also parse, queue times and service times
+    queueTimes.clear();
+    svcTimes.clear();
+    return (float) lat * 1e-6;
     return 0;
 }
 

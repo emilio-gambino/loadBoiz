@@ -4,6 +4,7 @@
 #include <vector>
 #include <utility>
 #include <string>
+#include <memory>
 
 #include <stdlib.h>
 #include <sched.h>
@@ -29,6 +30,8 @@ extern "C" int mallctl(const char *name, void *oldp, size_t *oldlenp, void *newp
 #include "request.h"
 #include "tbench_server.h"
 #include "helpers.h"
+
+#include "convergence.h"
 
 using namespace std;
 using namespace util;
@@ -125,6 +128,8 @@ bench_worker::run() {
     const double baseLambda = getOpt<double>("TBENCH_QPS", 1000.0) * 1e-9;
     Client_changeDistribution(baseLambda);
 
+    std::unique_ptr<IConvergenceModel> convergence_model(new VariationCoefficientModel(10.f, 10));
+
     int count = 0;
 
     while (running) {
@@ -169,6 +174,15 @@ bench_worker::run() {
         float latency = tBenchServerDumpLatency(percentile); // TODO get latency
 
         // TODO logic for convergence here
+        const bool bHasConverged = convergence_model->aggregate(latency);
+        if (bHasConverged)
+        {
+            std::cout << "We have converged.\n";
+        }
+        else
+        {
+            std::cout << "We did not converge yet.\n";
+        }
 
         // TODO reset state, ex ntx_commit
         ntxn_commits = 0;
@@ -178,6 +192,8 @@ bench_worker::run() {
             running = false;
             // TODO reset count to reiterate
         }
+
+        running = !bHasConverged;
         ++count;
     }
 }
