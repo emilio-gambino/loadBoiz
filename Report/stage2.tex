@@ -1,5 +1,5 @@
 \documentclass[12pt]{article}
-\usepackage[margin=1in]{geometry}
+\usepackage[top=0.8in, bottom=1in, left=1.1in, right=1.1in]{geometry} 
 \usepackage[all]{xy}
 \usepackage{setspace}
 \usepackage{float}
@@ -58,7 +58,7 @@ We shortly remind here the previous status of the project at the end of the stag
 \clearpage
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.7\textwidth]{distrib.png}
+  \includegraphics[width=0.6\textwidth]{distrib.png}
   \caption{Hypothetic Latency Distribution}
   \label{fig:sample}
 \end{figure}
@@ -110,18 +110,19 @@ In this section, we discuss the new theoretical questions which are raised by ou
 
 \singlespacing
 \noindent \textit{Hypothesis test}:
-\noindent Here is the results that we obtained
+\noindent Here are the results that we obtained:
 
-Mashallah on trouve ce qu'il faut
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{95percent.png}
+  \caption{Tail Latency Measurement}
+  \label{fig:sample}
+\end{figure}
 
-Now that we have a good reason to believe that our hypothesis is correct, we propose an algorithm which exploits this hypothesis in order to solve our problem.
+\noindent As we can see, the tail latency greatly increases when we perform a change in workload, and eventually converges back to its inherent state. Now that we have a good reason to believe that our hypothesis is correct, we propose an algorithm which exploits this hypothesis in order to solve our problem.
 
-• Metric Modeling: Include your model, analysis steps, experimental validation results, and error analysis.
-
-• Solution Proposal: Test results supporting your design decisions.
-\singlespacing
-
-\noindent \textit{Algorithm Design}: We now give the algorithm that we have designed in order to maximize throughput within tail latency constraints. The numbers on the right indicate to which theoretical problem each method corresponds to.
+\vspace{0.5em}
+\noindent \textit{Algorithm Design}: Here is the algorithm, the numbers on the right indicate to which theoretical problem each method corresponds to.
 
 \begin{algorithm}
 	\caption{Load-Aware Load Generator}\label{alg:cap}
@@ -136,9 +137,9 @@ Now that we have a good reason to believe that our hypothesis is correct, we pro
 		\IF{converged}
 		\IF{ global\_convergence(latency, latency\_requirement)} \hfill Problem 2.2
 		\STATE \textbf{return} (load, latency) 
-		\ELSIF{latency $>$ latency\_requirement}
-		\STATE increase\_load() \hfill Problem 3.
 		\ELSIF{latency $<$ latency\_requirement}
+		\STATE increase\_load() \hfill Problem 3.
+		\ELSIF{latency $>$ latency\_requirement}
 		\STATE decrease\_load()\hfill Problem 3.
 		\ENDIF
 		\ENDIF

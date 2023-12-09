@@ -9,6 +9,7 @@
 #include <sched.h>
 #include <unistd.h>
 #include <sys/sysinfo.h>
+#include <valarray>
 
 #include "bench.h"
 
@@ -100,6 +101,8 @@ write_cb(void *p, const char *s) {
 
 static event_avg_counter evt_avg_abort_spins("avg_abort_spins");
 
+extern void Client_changeDistribution(const int QPS);
+
 void
 bench_worker::run() {
     std::cout << "Starting Worker" << std::endl;
@@ -119,6 +122,9 @@ bench_worker::run() {
     tBenchServerThreadStart();
 
     int count = 0;
+
+    bool changed = false; // TODO remove
+    std::vector<float> accumulator;
 
     while (running) {
         while (ntxn_commits < ops_per_worker) {
@@ -158,20 +164,39 @@ bench_worker::run() {
             txn_counts[type]++;
         }
 
-        float percentile = 95.0;
-        float latency = tBenchServerDumpLatency(percentile); // TODO get latency
+        float percentile = 99.0;                             // TODO: hardcoded
+        float latency = tBenchServerDumpLatency(percentile);
+        tail_latencies.push_back(latency);
 
-        // TODO logic for convergence here
+        std::cout << "Latency : " << latency << std::endl;
+        accumulator.push_back(latency);
+        tail_latencies.clear();
+
+        if (count > 30 && !changed) {
+            int QPS = 13000;
+            Client_changeDistribution(QPS);
+            changed = true;
+        }
 
         // TODO reset state, ex ntx_commit
         ntxn_commits = 0;
-        std::cout << "Finished iteration !" << endl;
-        if (count > 2) {
+        //std::cout << "Finished iteration !" << endl;
+        if (count > 80) {
             // TODO make a change in QPS -> change startReq from client.cpp
             running = false;
             // TODO reset count to reiterate
         }
         ++count;
+    }
+    std::ofstream outputFile("../output/output.txt");
+    if (outputFile.is_open()) {
+        for (size_t i = 0; i < accumulator.size(); ++i) {
+            outputFile << accumulator[i];
+            outputFile << "\n";
+        }
+        outputFile.close();
+    } else {
+        std::cout << "CANNOT OPEN FILE" << std::endl;
     }
 }
 
@@ -241,7 +266,7 @@ bench_runner::run() {
     // ------------------------------------------------------------------
 
     // TODO here we need to determine the sample size for accurate tail latency measurement
-    ops_per_worker = 1000;
+    ops_per_worker = 7000;
     // in the beginning fixed size, later depending on observed variance
 
     const vector<bench_worker *> workers = make_workers();
