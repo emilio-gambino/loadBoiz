@@ -69,9 +69,48 @@ void Client::overrideIfDirty() {
         }
 
         dist = new ExpDist(lambda, seed, curNs);
-        std::cout << "Changing QPS to: " << lambda * 1e9 << std::endl;
+        std::cout << "-------------- Changing QPS to: " << lambda * 1e9 << " --------------" << std::endl;
     }
 }
+
+double Client::getMean() {
+    double m = 0;
+    for (uint64_t value: sjrnTimes) {
+        m += static_cast<double>(value);
+    }
+    m /= static_cast<double>(sjrnTimes.size());
+
+    return m;
+}
+
+double Client::getVariance() {
+    double mean = getMean();
+
+    double sumSqr = 0;
+    for (uint64_t value: sjrnTimes) {
+        double diff = value - mean;
+        sumSqr += diff * diff;
+    }
+
+    double var = sumSqr / (sjrnTimes.size() - 1);
+    return var;
+}
+
+// input float percentile : a number between 1 and 100
+float Client::dumpLatency(float percentile) {
+    sort(sjrnTimes.begin(), sjrnTimes.end());
+    uint64_t lat = sjrnTimes[(percentile / 100) * sjrnTimes.size()];
+    sjrnTimes.clear();
+    // TODO also parse, queue times and service times
+    queueTimes.clear();
+    svcTimes.clear();
+    return (float) lat;
+}
+
+ClientStatus Client::getStatus() {
+    return status;
+}
+
 // ###              LOADBOIZ end change
 // ######################################################################
 
@@ -105,6 +144,7 @@ Request *Client::startReq() {
             uint64_t curNs = getCurNs();
             dist = new ExpDist(lambda, seed, curNs);
 
+            std::cout << "Starting Warmup .." << std::endl;
             status = WARMUP;
 
             pthread_barrier_destroy(&barrier);
@@ -150,7 +190,7 @@ void Client::finiReq(Response *resp) {
     assert(it != inFlightReqs.end());
     Request *req = it->second;
 
-    if (status == ROI) {
+    if (status == ROI || status == WARMUP) {
         uint64_t curNs = getCurNs();
 
         assert(curNs > req->genNs);
@@ -199,16 +239,6 @@ void Client::dumpStats() {
     out.close();
 }
 
-// input float percentile : a number between 1 and 100
-float Client::dumpLatency(float percentile) { // should take percentile as input
-    sort(sjrnTimes.begin(), sjrnTimes.end());
-    uint64_t lat = sjrnTimes[(percentile / 100) * sjrnTimes.size()];
-    sjrnTimes.clear();
-    // TODO also parse, queue times and service times
-    queueTimes.clear();
-    svcTimes.clear();
-    return (float) lat * 1e-6;
-}
 
 /*******************************************************************************
  * Networked Client

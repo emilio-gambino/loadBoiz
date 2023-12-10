@@ -76,6 +76,7 @@ void IntegratedServer::sendResp(int id, const void *data, size_t len) {
     ++finishedReqs;
 
     if (finishedReqs == warmupReqs) {
+        std::cout << "Finished Warmup: " << finishedReqs - 1 << " requests." << std::endl;
         Client::_startRoi();
     } else if (finishedReqs == warmupReqs + maxReqs) {
         Client::dumpStats();
@@ -125,3 +126,14 @@ float tBenchServerDumpLatency(float percentile) {
     return server->dumpLatency(percentile);
 }
 
+double tBenchServerDumpVariance() {
+    return server->getVariance();
+}
+
+double tBenchServerDumpMean() {
+    return server->getMean();
+}
+
+int tBenchServerGetStatus() {
+    return server->getStatus();
+}

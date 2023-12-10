@@ -67,6 +67,9 @@ class Client {
     public:
         /* Changes the distribution of all clients. */
         static void changeDistribution(const int QPS);
+        enum ClientStatus getStatus();
+        double getVariance();
+        double getMean();
     protected:
         void overrideIfDirty();
         static double lambda_override;

@@ -183,7 +183,6 @@ private:
   size_t ntxn_aborts;
   uint64_t latency_numer_us;
   unsigned backoff_shifts;
-  std::vector<float> tail_latencies;
 
 protected:
 
