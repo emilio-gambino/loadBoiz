@@ -4,6 +4,7 @@
 #include <vector>
 #include <utility>
 #include <string>
+#include <memory>
 
 #include <stdlib.h>
 #include <sched.h>
@@ -29,6 +30,27 @@ extern "C" int mallctl(const char *name, void *oldp, size_t *oldlenp, void *newp
 
 #include "request.h"
 #include "tbench_server.h"
+
+#include "convergence.h"
+
+
+template<typename T>
+static T getOpt(const char* name, T defVal) {
+    const char* opt = getenv(name);
+
+    std::cout << name << " = " << opt << std::endl;
+    if (!opt) return defVal;
+    std::stringstream ss(opt);
+    if (ss.str().length() == 0) return defVal;
+    T res;
+    ss >> res;
+    if (ss.fail()) {
+        std::cerr << "WARNING: Option " << name << "(" << opt << ") could not"\
+            << " be parsed, using default" << std::endl;
+        return defVal;
+    }   
+    return res;
+}
 
 using namespace std;
 using namespace util;
@@ -121,6 +143,12 @@ bench_worker::run() {
 
     tBenchServerThreadStart();
 
+    // Example of changing the distribution of all clients.
+    const double baseLambda = getOpt<double>("TBENCH_QPS", 1000.0) * 1e-9;
+    Client_changeDistribution(baseLambda);
+
+    std::unique_ptr<IConvergenceModel> convergence_model(new VariationCoefficientModel(10.f, 5, 20));
+
     int count = 0;
 
     while (running) {
@@ -188,6 +216,15 @@ bench_worker::run() {
         if (count > 5) {
             int QPS = 7000;
             Client_changeDistribution(QPS);
+        // TODO logic for convergence here
+        const bool bHasConverged = convergence_model->aggregate(latency);
+        if (bHasConverged)
+        {
+            std::cout << "We have converged.\n";
+        }
+        else
+        {
+            std::cout << "We did not converge yet.\n";
         }
 
         // TODO reset state, ex ntx_commit
@@ -198,12 +235,14 @@ bench_worker::run() {
             running = false;
             // TODO reset count to reiterate
         }
+
+        running = !bHasConverged;
         ++count;
     }
 }
 
-void
-bench_runner::run() {
+void bench_runner::run() 
+{
     tBenchServerInit(nthreads);
 
     // load data

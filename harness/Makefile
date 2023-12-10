@@ -5,15 +5,19 @@ CXX = g++
 CXXFLAGS = -O3 -g -fPIC -std=c++0x
 COMMON_INCLUDES = dist.h helpers.h msgs.h
 
-default: client.o tbench_server_integrated.o tbench_server_networked.o \
+default: convergence.o client.o tbench_server_integrated.o tbench_server_networked.o \
 	tbench_client_networked.o tbench.jar
+
+convergence.o : convergence.cpp convergence.h $(COMMON_INCLUDES)
+	echo "build convergence"
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 client.o : client.cpp client.h $(COMMON_INCLUDES)
 	echo "build client"
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 tbench_server_integrated.o : tbench_server_integrated.cpp tbench_server.h \
-	server.h client.h $(COMMON_INCLUDES)
+	server.h client.h client.cpp $(COMMON_INCLUDES)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 tbench_server_networked.o : tbench_server_networked.cpp tbench_server.h \

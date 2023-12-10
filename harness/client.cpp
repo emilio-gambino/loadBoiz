@@ -46,8 +46,8 @@
 
 // Workaround to not include client.h as they define the same struct in bench.h and msg.h with
 // different members.
-void Client_changeDistribution(const int QPS) {
-    Client::changeDistribution(QPS);
+extern "C" void Client_changeDistribution(const double lambda) {
+    Client::changeDistribution(lambda);
 }
 
 double Client::lambda_override; // Set in constructor
@@ -208,6 +208,7 @@ float Client::dumpLatency(float percentile) { // should take percentile as input
     queueTimes.clear();
     svcTimes.clear();
     return (float) lat * 1e-6;
+    return 0;
 }
 
 /*******************************************************************************
@@ -235,8 +236,7 @@ NetworkedClient::NetworkedClient(int nthreads, std::string serverip,
 
     if ((status = getaddrinfo(serverStr, portstr.str().c_str(), &hints,
                               &servInfo)) != 0) {
-        std::cerr << "getaddrinfo() failed: " << gai_strerror(status) \
- << std::endl;
+        std::cerr << "getaddrinfo() failed: " << gai_strerror(status) << std::endl;
         exit(-1);
     }
 
