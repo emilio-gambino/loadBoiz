@@ -71,6 +71,12 @@ VariationCoefficientModel::VariationCoefficientModel(VCFunction vc_conv, const i
 {
 }
 
+void VariationCoefficientModel::reset()
+{
+  m_epoch = 0;
+  tail_latencies.clear();
+}
+
 bool VariationCoefficientModel::aggregate(const float tail_latency)
 {
   tail_latencies.emplace_back(tail_latency);

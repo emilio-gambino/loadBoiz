@@ -6,7 +6,16 @@
 class IConvergenceModel
 {
 public:
+  /**
+   * Aggregates a tail latency.
+   * @return If we are satisfying the convergence conditions.
+  */
   virtual bool aggregate(const float tail_latency) = 0;
+
+  /**
+   * Resets the model to its base state.
+  */
+  virtual void reset() = 0;
 };
 
 using VCFunction = std::function<float(int /* Epoch */)>;
@@ -18,6 +27,7 @@ public:
   VariationCoefficientModel(VCFunction vc_conv, const int min_samples, const int window);
 
   virtual bool aggregate(const float tail_latency) override;
+  virtual void reset() override;
 
 private:
   const float m_vc_conv;
