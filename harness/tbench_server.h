@@ -23,8 +23,6 @@
 extern "C" {
 #endif
 
-void Client_changeDistribution(const double lambda);
-
 void tBenchServerInit(int nthreads);
 
 void tBenchServerThreadStart();

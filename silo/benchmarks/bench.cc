@@ -10,6 +10,7 @@
 #include <sched.h>
 #include <unistd.h>
 #include <sys/sysinfo.h>
+#include <valarray>
 
 #include "bench.h"
 
@@ -29,7 +30,6 @@ extern "C" int mallctl(const char *name, void *oldp, size_t *oldlenp, void *newp
 
 #include "request.h"
 #include "tbench_server.h"
-#include "helpers.h"
 
 #include "convergence.h"
 
@@ -48,6 +48,24 @@ int slow_exit = 0;
 int retry_aborted_transaction = 0;
 int no_reset_counters = 0;
 int backoff_aborted_transaction = 0;
+
+template<typename T>
+static T getOpt(const char* name, T defVal) {
+    const char* opt = getenv(name);
+
+    std::cout << name << " = " << opt << std::endl;
+    if (!opt) return defVal;
+    std::stringstream ss(opt);
+    if (ss.str().length() == 0) return defVal;
+    T res;
+    ss >> res;
+    if (ss.fail()) {
+        std::cerr << "WARNING: Option " << name << "(" << opt << ") could not"\
+            << " be parsed, using default" << std::endl;
+        return defVal;
+    }   
+    return res;
+}
 
 template<typename T>
 static void
@@ -104,7 +122,7 @@ write_cb(void *p, const char *s) {
 
 static event_avg_counter evt_avg_abort_spins("avg_abort_spins");
 
-extern void Client_changeDistribution(const double lambda);
+extern "C" void Client_changeDistribution(const int QPS);
 
 void
 bench_worker::run() {
@@ -131,6 +149,9 @@ bench_worker::run() {
     std::unique_ptr<IConvergenceModel> convergence_model(new VariationCoefficientModel(10.f, 5, 20));
 
     int count = 0;
+
+    bool changed = false; // TODO remove
+    std::vector<float> accumulator;
 
     while (running) {
         while (ntxn_commits < ops_per_worker) {
@@ -170,8 +191,9 @@ bench_worker::run() {
             txn_counts[type]++;
         }
 
-        float percentile = 95.0;
-        float latency = tBenchServerDumpLatency(percentile); // TODO get latency
+        float percentile = 99.0;                             // TODO: hardcoded
+        float latency = tBenchServerDumpLatency(percentile);
+        tail_latencies.push_back(latency);
 
         // TODO logic for convergence here
         const bool bHasConverged = convergence_model->aggregate(latency);
@@ -183,11 +205,21 @@ bench_worker::run() {
         {
             std::cout << "We did not converge yet.\n";
         }
+        
+        std::cout << "Latency : " << latency << std::endl;
+        accumulator.push_back(latency);
+        tail_latencies.clear();
+
+        if (count > 30 && !changed) {
+            int QPS = 13000;
+            Client_changeDistribution(QPS);
+            changed = true;
+        }
 
         // TODO reset state, ex ntx_commit
         ntxn_commits = 0;
-        std::cout << "Finished iteration !" << endl;
-        if (count > 2) {
+        //std::cout << "Finished iteration !" << endl;
+        if (count > 80) {
             // TODO make a change in QPS -> change startReq from client.cpp
             running = false;
             // TODO reset count to reiterate
@@ -195,6 +227,16 @@ bench_worker::run() {
 
         running = !bHasConverged;
         ++count;
+    }
+    std::ofstream outputFile("../output/output.txt");
+    if (outputFile.is_open()) {
+        for (size_t i = 0; i < accumulator.size(); ++i) {
+            outputFile << accumulator[i];
+            outputFile << "\n";
+        }
+        outputFile.close();
+    } else {
+        std::cout << "CANNOT OPEN FILE" << std::endl;
     }
 }
 
@@ -264,7 +306,7 @@ bench_runner::run() {
     // ------------------------------------------------------------------
 
     // TODO here we need to determine the sample size for accurate tail latency measurement
-    ops_per_worker = 1000;
+    ops_per_worker = 7000;
     // in the beginning fixed size, later depending on observed variance
 
     const vector<bench_worker *> workers = make_workers();

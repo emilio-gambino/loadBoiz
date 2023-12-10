@@ -26,7 +26,7 @@
 #include <sstream>
 
 template<typename T>
-static T getOpt(const char* name, T defVal) {
+T getOpt(const char* name, T defVal) {
     const char* opt = getenv(name);
 
     std::cout << name << " = " << opt << std::endl;

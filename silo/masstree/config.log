@@ -27,7 +27,7 @@ uname -v = #37~22.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Oct  9 15:34:04 UTC 2
 /usr/bin/oslevel       = unknown
 /bin/universe          = unknown
 
-PATH: /home/pandores/.vscode-server/bin/f1b07bd25dfad64b0167beb15359ae573aecd2cc/bin/remote-cli
+PATH: /home/pandores/.vscode-server/bin/af28b32d7e553898b2a91af498b1fb666fdebe0c/bin/remote-cli
 PATH: /usr/local/sbin
 PATH: /usr/local/bin
 PATH: /usr/sbin
@@ -334,7 +334,7 @@ configure:4125: checking for numa.h
 configure:4125: result: yes
 configure:4136: checking for library containing numa_available
 configure:4167: g++ -o conftest -g -O2   conftest.cpp  >&5
-/usr/bin/ld: /tmp/ccPaqy4r.o: in function `main':
+/usr/bin/ld: /tmp/cc8XBfvN.o: in function `main':
 /home/pandores/Desktop/CS471/loadBoiz/silo/masstree/conftest.cpp:33: undefined reference to `numa_available'
 collect2: error: ld returned 1 exit status
 configure:4167: $? = 1
