@@ -128,7 +128,7 @@ bench_worker::run() {
     const double baseLambda = getOpt<double>("TBENCH_QPS", 1000.0) * 1e-9;
     Client_changeDistribution(baseLambda);
 
-    std::unique_ptr<IConvergenceModel> convergence_model(new VariationCoefficientModel(10.f, 10));
+    std::unique_ptr<IConvergenceModel> convergence_model(new VariationCoefficientModel(10.f, 5, 20));
 
     int count = 0;
 
