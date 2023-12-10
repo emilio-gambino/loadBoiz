@@ -195,37 +195,50 @@ bench_worker::run() {
         float latency = tBenchServerDumpLatency(percentile);
         tail_latencies.push_back(latency);
 
-        // TODO logic for convergence here
-        const bool bHasConverged = convergence_model->aggregate(latency);
-        if (bHasConverged)
+        // @note Static just to keep it local here.
+        static size_t step_index = 0;
+        static const std::vector<int> steps = 
         {
-            std::cout << "We have converged.\n";
-        }
-        else
-        {
-            std::cout << "We did not converge yet.\n";
-        }
-        
+            8000,
+            8500,
+            9000,
+            9500,
+            10000,
+        };
+
         std::cout << "Latency : " << latency << std::endl;
+
         accumulator.push_back(latency);
         tail_latencies.clear();
 
-        if (count > 30 && !changed) {
-            int QPS = 13000;
-            Client_changeDistribution(QPS);
-            changed = true;
+        const bool bHasConverged = convergence_model->aggregate(latency);
+        if (bHasConverged)
+        {
+            ++step_index;
+            if (step_index >= steps.size())
+            {
+                std::cout << "Reached the end of the steps.\n";
+                running = false;
+            }
+            else
+            {
+                const auto new_qps = steps[step_index];
+                Client_changeDistribution(new_qps);
+                convergence_model->reset();
+                changed = true;
+                std::cout << "Convergence reached. Increasing QPS to " << new_qps << "\n";
+            }
         }
+
+        // if (count > 30 && !changed) {
+        //     int QPS = 13000;
+        //     Client_changeDistribution(QPS);
+        //     changed = true;
+        // }
 
         // TODO reset state, ex ntx_commit
         ntxn_commits = 0;
-        //std::cout << "Finished iteration !" << endl;
-        if (count > 80) {
-            // TODO make a change in QPS -> change startReq from client.cpp
-            running = false;
-            // TODO reset count to reiterate
-        }
 
-        running = !bHasConverged;
         ++count;
     }
     std::ofstream outputFile("../output/output.txt");
