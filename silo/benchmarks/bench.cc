@@ -126,7 +126,8 @@ static event_avg_counter evt_avg_abort_spins("avg_abort_spins");
 extern void Client_changeDistribution(const int QPS);
 
 void
-bench_worker::run() {
+bench_worker::run() 
+{
     std::cout << "Starting Worker" << std::endl;
 
     if (set_core_id)
@@ -216,6 +217,8 @@ bench_worker::run() {
         if (count > 5) {
             int QPS = 7000;
             Client_changeDistribution(QPS);
+        }
+        
         // TODO logic for convergence here
         const bool bHasConverged = convergence_model->aggregate(latency);
         if (bHasConverged)
