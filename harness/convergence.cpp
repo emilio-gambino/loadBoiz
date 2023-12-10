@@ -58,34 +58,46 @@ VariationCoefficientModel::VariationCoefficientModel(const float vc_conv, const 
   : m_vc_conv(vc_conv)
   , m_min_samples(min_samples)
   , m_window(window)
+  , m_epoch(0)
+{
+}
+
+VariationCoefficientModel::VariationCoefficientModel(VCFunction vc_conv, const int min_samples, const int window)
+  : m_vc_conv(-1.f)
+  , m_vc_fun_conv(std::move(vc_conv))
+  , m_min_samples(min_samples)
+  , m_window(window)
+  , m_epoch(0)
 {
 }
 
 bool VariationCoefficientModel::aggregate(const float tail_latency)
 {
   tail_latencies.emplace_back(tail_latency);
-
-  --m_min_samples;
+  ++m_epoch;
 
   if (m_window)
   {
     tail_latencies = std::vector<float>(tail_latencies.end() - m_window, tail_latencies.end());
   }
 
-  if (tail_latencies.size() < static_cast<size_t>(m_min_samples))
+  if (m_min_samples > m_epoch)
   {
     return false;
   }
+
+  const float wanted_vc = m_vc_conv <= 0.f ? m_vc_fun_conv(m_epoch) : m_vc_conv;
   
   const auto vc = get_variation_coefficient(tail_latencies);
 
   std::cout 
+    << "Convergence status:\n"
     << " - t_lat: " << tail_latency << "\n"
     << " - mean: " << get_mean(tail_latencies) << "\n"
     << " - var: " << get_variance(tail_latencies) << "\n"
     << " - vc: " << vc << "\n"
-    << " - wanted vc < " << m_vc_conv << "\n";
+    << " - wanted vc < " << wanted_vc << "\n";
 
-  return vc < m_vc_conv;
+  return vc < wanted_vc;
 }
 
