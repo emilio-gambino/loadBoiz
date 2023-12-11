@@ -46,14 +46,15 @@
 
 // Workaround to not include client.h as they define the same struct in bench.h and msg.h with
 // different members.
-extern "C" void Client_changeDistribution(const double lambda) {
+void Client_changeDistribution(const double lambda) {
+    std::cout << "Changing distribution to " << lambda * 1e9 << "\n";
     Client::changeDistribution(lambda);
 }
 
 double Client::lambda_override; // Set in constructor
 
 void Client::changeDistribution(const double QPS) {
-    lambda_override = QPS;
+    lambda_override = QPS * 1e-9;
 }
 
 void Client::overrideIfDirty() {

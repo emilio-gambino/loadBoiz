@@ -107,7 +107,7 @@ write_cb(void *p, const char *s) {
 
 static event_avg_counter evt_avg_abort_spins("avg_abort_spins");
 
-extern "C" void Client_changeDistribution(const int QPS);
+void Client_changeDistribution(const double QPS);
 
 void
 bench_worker::run() {
@@ -128,10 +128,10 @@ bench_worker::run() {
     tBenchServerThreadStart();
 
     // Example of changing the distribution of all clients.
-    const double baseLambda = getOpt<double>("TBENCH_QPS", 1000.0) * 1e-9;
+    const double baseLambda = getOpt<double>("TBENCH_QPS", 1000.0);
     Client_changeDistribution(baseLambda);
 
-    std::unique_ptr<IConvergenceModel> convergence_model(new VariationCoefficientModel(10.f, 5, 20));
+    std::unique_ptr<IConvergenceModel> convergence_model(new VariationCoefficientModel(20.f, 5, 10));
 
     int count = 0;
 
@@ -182,7 +182,7 @@ bench_worker::run() {
 
         // @note Static just to keep it local here.
         static size_t step_index = 0;
-        static const std::vector<int> steps = 
+        static const std::vector<double> steps = 
         {
             8000,
             8500,
@@ -206,30 +206,28 @@ bench_worker::run() {
             const uint64_t new_size = std::ceil((new_sample * 0.5 + ops_per_worker * 0.5) / 1000) * 1000;
 
             ops_per_worker = new_size; // damping updates
-            ops_per_worker = std::min<uint64_t>(2e5, ops_per_worker); // Set a maximum window
+            ops_per_worker = std::min<uint64_t>(2e4, ops_per_worker); // Set a maximum window
 
             std::cout << "Iteration: " << count << ", Ops: " << new_size << ", New sample size : " << ops_per_worker
                       << std::endl;
+
+            const bool bHasConverged = convergence_model->aggregate(latency);
+            if (bHasConverged)
+            {
+                convergence_model->reset();
+                if (step_index + 1 >= steps.size())
+                {
+                    running = false;
+                }
+                else
+                {
+                    const auto new_qps = steps[step_index++];
+                    std::cout << "Load increase step " << step_index << " qps: " << new_qps << "\n";
+                    Client_changeDistribution(new_qps);
+                }
+            }
         }
 
-        const bool bHasConverged = convergence_model->aggregate(latency);
-        if (bHasConverged)
-        {
-            convergence_model->reset();
-            if (step_index + 1 >= steps.size())
-            {
-                running = false;
-            }
-            else
-            {
-                const auto new_qps = steps[step_index++];
-                Client_changeDistribution(new_qps);
-            }
-        }
-
-        if (count == 50) {
-            running = false;
-        }
 
         // TODO make sure all state is reset
         ntxn_commits = 0;
