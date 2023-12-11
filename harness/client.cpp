@@ -83,6 +83,10 @@ double Client::getMean() {
     return m;
 }
 
+size_t Client::getSampleSize() {
+    return sjrnTimes.size();
+}
+
 double Client::getVariance() {
     double mean = getMean();
 
@@ -96,14 +100,72 @@ double Client::getVariance() {
     return var;
 }
 
+
+double Client::getAggregateVariance(int window, double mean) {
+    if (aggregateSjrn.size() == window) {
+
+        double sumSqr = 0;
+        size_t size = 0;
+        for (const auto &it: aggregateSjrn) {
+            for (const double &v: it) {
+                double diff = v - mean;
+                sumSqr += diff * diff;
+            }
+            size += it.size();
+        }
+        double var = sumSqr / (size - 1);
+        return var;
+    }
+    return -1;
+}
+
+double Client::getAggregateMean(int window) {
+    aggregateSjrn.push_back(sjrnTimes);
+    if (aggregateSjrn.size() == window) {
+        double m = 0;
+        size_t size = 0;
+        for (const auto &it: aggregateSjrn) {
+            for (const double &v: it) {
+                m += v;
+            }
+            size += it.size();
+        }
+        m /= size;
+        return m;
+    }
+    return -1;
+}
+
+double Client::getAggregateLatency(float percentile, int window) {
+    if (aggregateSjrn.size() == window) {
+        std::vector<int> flatSjrn;
+        for (const auto &v: aggregateSjrn) {
+            flatSjrn.insert(flatSjrn.end(), v.begin(), v.end());
+        }
+        sort(flatSjrn.begin(), flatSjrn.end());
+        uint64_t lat = flatSjrn[(percentile / 100) * flatSjrn.size()];
+
+        aggregateSjrn.erase(aggregateSjrn.begin());
+        sjrnTimes.clear();
+        queueTimes.clear();
+        svcTimes.clear();
+        return lat;
+    }
+    sjrnTimes.clear();
+    queueTimes.clear();
+    svcTimes.clear();
+    return -1;
+}
+
 // input float percentile : a number between 1 and 100
 float Client::dumpLatency(float percentile) {
     sort(sjrnTimes.begin(), sjrnTimes.end());
     uint64_t lat = sjrnTimes[(percentile / 100) * sjrnTimes.size()];
+    aggregateSjrn.push_back(sjrnTimes);
     sjrnTimes.clear();
-    // TODO also parse, queue times and service times
     queueTimes.clear();
     svcTimes.clear();
+    // TODO also parse, queue times and service times??
     return (float) lat;
 }
 

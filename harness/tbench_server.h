@@ -41,6 +41,14 @@ double tBenchServerDumpMean();
 
 int tBenchServerGetStatus();
 
+size_t tBenchServerDumpSampleSize();
+
+size_t tBenchServerDumpAggregateLatency(float percentile, int window);
+
+double tBenchServerDumpAggregateVariance(int window, double mean);
+
+double tBenchServerDumpAggregateMean(int window);
+
 #ifdef __cplusplus
 }
 #endif

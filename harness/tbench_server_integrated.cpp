@@ -126,6 +126,22 @@ float tBenchServerDumpLatency(float percentile) {
     return server->dumpLatency(percentile);
 }
 
+size_t tBenchServerDumpAggregateLatency(float percentile, int window) {
+    return server->getAggregateLatency(percentile, window);
+}
+
+double tBenchServerDumpAggregateVariance(int window, double mean) {
+    return server->getAggregateVariance(window, mean);
+}
+
+double tBenchServerDumpAggregateMean(int window) {
+    return server->getAggregateMean(window);
+}
+
+size_t tBenchServerDumpSampleSize() {
+    return server->getSampleSize();
+}
+
 double tBenchServerDumpVariance() {
     return server->getVariance();
 }

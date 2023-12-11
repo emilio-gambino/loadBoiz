@@ -48,6 +48,7 @@ class Client {
         std::vector<uint64_t> svcTimes;
         std::vector<uint64_t> queueTimes;
         std::vector<uint64_t> sjrnTimes;
+        std::vector<std::vector<uint64_t>> aggregateSjrn;
 
         void _startRoi();
 
@@ -68,8 +69,12 @@ class Client {
         /* Changes the distribution of all clients. */
         static void changeDistribution(const double QPS);
         enum ClientStatus getStatus();
+        size_t getSampleSize();
         double getVariance();
         double getMean();
+        double getAggregateVariance(int window, double mean);
+        double getAggregateMean(int window);
+        double getAggregateLatency(float percentile, int window);
     protected:
         void overrideIfDirty();
         static double lambda_override;

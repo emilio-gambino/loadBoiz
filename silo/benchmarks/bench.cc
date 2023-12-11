@@ -131,7 +131,8 @@ bench_worker::run() {
     const double baseLambda = getOpt<double>("TBENCH_QPS", 1000.0) * 1e-9;
     Client_changeDistribution(baseLambda);
 
-    std::unique_ptr<IConvergenceModel> convergence_model(new VariationCoefficientModel(10.f, 5, 20));
+    const int WINDOW_SIZE = 5;
+    std::unique_ptr <IConvergenceModel> convergence_model(new VariationCoefficientModel(10.f, 5, WINDOW_SIZE));
 
     int count = 0;
 
@@ -175,65 +176,63 @@ bench_worker::run() {
             txn_counts[type]++;
         }
 
-        float percentile = 99.0;                             // TODO: hardcoded
-        float var = tBenchServerDumpVariance();
+        if (tBenchServerGetStatus() != 2) {
+            ntxn_commits = 0;
+            continue;
+        }
+
+        float percentile = 99.0;
+        float m = tBenchServerDumpAggregateMean(WINDOW_SIZE);
+        float var = tBenchServerDumpAggregateVariance(WINDOW_SIZE, m);
+        float latency = tBenchServerDumpAggregateLatency(percentile, WINDOW_SIZE);
+
+        if (m == -1) {
+            ntxn_commits = 0;
+            continue;
+        }
+
+        /*float var = tBenchServerDumpVariance();
         float m = tBenchServerDumpMean();
-        float latency = tBenchServerDumpLatency(percentile); // Warning: this clears the sjrnTimes, cannot use after
+        size_t sampleSize = tBenchServerDumpSampleSize();
+        float latency = tBenchServerDumpLatency(percentile); // Warning: this clears the sjrnTimes, cannot use after*/
+
+        accumulator.push_back({latency, m, sqrt(var)});
 
         // @note Static just to keep it local here.
         static size_t step_index = 0;
-        static const std::vector<int> steps = 
-        {
-            8000,
-            8500,
-            9000,
-            9500,
-            10000,
-        };
+        static const std::vector<int> steps = {6200, 6400, 6600, 6800, 7000};
 
         std::cout << std::fixed << std::setprecision(4) << "Tail Latency : " << latency * 1e-6 << ", Mean: " << m * 1e-6
                   << ", Std: " << sqrt(var) * 1e-6 << std::endl;
 
+        // Compute new sample size
+        const float Z = 1.96; // Z-score for 95-th confidence interval, 2.33 for 99-th
+        const float E = 1e5; // Tolerance from true mean, here 100 microseconds
+        const uint64_t new_sample = Z * Z * var / (E * E);
+        const uint64_t new_size = std::ceil((new_sample * 0.5 + ops_per_worker * 0.5) / 1000) * 1000;
+        ops_per_worker = new_size; // damping updates
+        ops_per_worker = std::min<uint64_t>(5e4, ops_per_worker); // Set a maximum window
+        std::cout << "Iteration: " << count << ", Ops: " << new_size << ", New sample size : " << ops_per_worker
+                  << std::endl;
 
-        // Checks if warmup finished
-        if (tBenchServerGetStatus() == 2) 
-        { 
-            accumulator.push_back({latency, m, sqrt(var)});
-            const float Z = 1.96; // Z-score for 95-th confidence interval
-            const float E = 1e4; // Tolerance from true mean, here 100 microseconds
-
-            const uint64_t new_sample = Z * Z * var / (E * E);
-            const uint64_t new_size = std::ceil((new_sample * 0.5 + ops_per_worker * 0.5) / 1000) * 1000;
-
-            ops_per_worker = new_size; // damping updates
-            ops_per_worker = std::min<uint64_t>(2e5, ops_per_worker); // Set a maximum window
-
-            std::cout << "Iteration: " << count << ", Ops: " << new_size << ", New sample size : " << ops_per_worker
-                      << std::endl;
-        }
-
+        // Compute convergence
         const bool bHasConverged = convergence_model->aggregate(latency);
-        if (bHasConverged)
-        {
+        if (bHasConverged) {
             convergence_model->reset();
-            if (step_index + 1 >= steps.size())
-            {
+            if (step_index + 1 >= steps.size()) {
                 running = false;
-            }
-            else
-            {
+            } else {
                 const auto new_qps = steps[step_index++];
                 Client_changeDistribution(new_qps);
             }
         }
 
-        if (count == 50) {
+        if (count == 60) {
             running = false;
         }
 
         // TODO make sure all state is reset
         ntxn_commits = 0;
-
         ++count;
     }
 
