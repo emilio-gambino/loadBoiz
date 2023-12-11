@@ -66,7 +66,10 @@ class Client {
 // ###              LOADBOIZ begin change
     public:
         /* Changes the distribution of all clients. */
-        static void changeDistribution(const int QPS);
+        static void changeDistribution(const double QPS);
+        enum ClientStatus getStatus();
+        double getVariance();
+        double getMean();
     protected:
         void overrideIfDirty();
         static double lambda_override;

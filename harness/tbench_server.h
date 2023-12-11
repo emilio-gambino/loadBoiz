@@ -35,6 +35,12 @@ void tBenchSendResp(const void *data, size_t size);
 
 float tBenchServerDumpLatency(float percentile);
 
+double tBenchServerDumpVariance();
+
+double tBenchServerDumpMean();
+
+int tBenchServerGetStatus();
+
 #ifdef __cplusplus
 }
 #endif
