@@ -107,7 +107,7 @@ write_cb(void *p, const char *s) {
 
 static event_avg_counter evt_avg_abort_spins("avg_abort_spins");
 
-extern "C" void Client_changeDistribution(const int QPS);
+void Client_changeDistribution(const double QPS);
 
 void
 bench_worker::run() {
@@ -128,11 +128,11 @@ bench_worker::run() {
     tBenchServerThreadStart();
 
     // Example of changing the distribution of all clients.
-    const double baseLambda = getOpt<double>("TBENCH_QPS", 1000.0) * 1e-9;
+    const double baseLambda = getOpt<double>("TBENCH_QPS", 1000.0);
     Client_changeDistribution(baseLambda);
 
     const int WINDOW_SIZE = 5;
-    std::unique_ptr <IConvergenceModel> convergence_model(new VariationCoefficientModel(10.f, 5, WINDOW_SIZE));
+    std::unique_ptr <IConvergenceModel> convergence_model(new VariationCoefficientModel(20.f, 5, WINDOW_SIZE));
 
     int count = 0;
 
@@ -200,18 +200,18 @@ bench_worker::run() {
 
         // @note Static just to keep it local here.
         static size_t step_index = 0;
-        static const std::vector<int> steps = {6200, 6400, 6600, 6800, 7000};
+        static const std::vector<int> steps = {8500, 9000, 9500, 10000, 10500};
 
         std::cout << std::fixed << std::setprecision(4) << "Tail Latency : " << latency * 1e-6 << ", Mean: " << m * 1e-6
                   << ", Std: " << sqrt(var) * 1e-6 << std::endl;
 
         // Compute new sample size
         const float Z = 1.96; // Z-score for 95-th confidence interval, 2.33 for 99-th
-        const float E = 1e5; // Tolerance from true mean, here 100 microseconds
+        const float E = 1e4; // Tolerance from true mean, here 100 microseconds
         const uint64_t new_sample = Z * Z * var / (E * E);
         const uint64_t new_size = std::ceil((new_sample * 0.5 + ops_per_worker * 0.5) / 1000) * 1000;
         ops_per_worker = new_size; // damping updates
-        ops_per_worker = std::min<uint64_t>(5e4, ops_per_worker); // Set a maximum window
+        ops_per_worker = std::min<uint64_t>(2e5, ops_per_worker); // Set a maximum window
         std::cout << "Iteration: " << count << ", Ops: " << new_size << ", New sample size : " << ops_per_worker
                   << std::endl;
 
@@ -225,10 +225,6 @@ bench_worker::run() {
                 const auto new_qps = steps[step_index++];
                 Client_changeDistribution(new_qps);
             }
-        }
-
-        if (count == 60) {
-            running = false;
         }
 
         // TODO make sure all state is reset

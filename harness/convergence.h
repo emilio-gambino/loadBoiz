@@ -1,6 +1,6 @@
 // @ Copyright
 
-#include <vector>
+#include <deque>
 #include <functional>
 
 class IConvergenceModel
@@ -34,7 +34,7 @@ private:
   const VCFunction m_vc_fun_conv;
   const int m_min_samples;
   const int m_window;
-  std::vector<float> tail_latencies;
+  std::deque<float> tail_latencies;
   int m_epoch;
 };
 
