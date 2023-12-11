@@ -13,6 +13,7 @@
 #include <sys/sysinfo.h>
 #include <valarray>
 #include <cmath>
+#include <chrono>
 
 #include "bench.h"
 
@@ -21,8 +22,8 @@
 #include "../allocator.h"
 
 #ifdef USE_JEMALLOC
-//cannot include this header b/c conflicts with malloc.h
-//#include <jemalloc/jemalloc.h>
+// cannot include this header b/c conflicts with malloc.h
+// #include <jemalloc/jemalloc.h>
 extern "C" void malloc_stats_print(void (*write_cb)(void *, const char *), void *cbopaque, const char *opts);
 extern "C" int mallctl(const char *name, void *oldp, size_t *oldlenp, void *newp, size_t newlen);
 #endif
@@ -52,41 +53,71 @@ int retry_aborted_transaction = 0;
 int no_reset_counters = 0;
 int backoff_aborted_transaction = 0;
 
-template<typename T>
+class PIDController
+{
+public:
+    PIDController(double kp, double ki, double kd, double target)
+        : kp(kp), ki(ki), kd(kd), target(target), integral(0), prevError(0) {}
+
+    double update(double error, double dt)
+    {
+        integral += error * dt;
+        double derivative = (error - prevError) / dt;
+        double output = kp * error + ki * integral + kd * derivative;
+        prevError = error;
+
+        return output;
+    }
+
+private:
+    double kp;        // Proportional gain
+    double ki;        // Integral gain
+    double kd;        // Derivative gain
+    double target;    // Target value (e.g., target 99th percentile latency)
+    double integral;  // Integral of the error over time
+    double prevError; // Previous error
+};
+
+template <typename T>
 static void
-delete_pointers(const vector<T *> &pts) {
+delete_pointers(const vector<T *> &pts)
+{
     for (size_t i = 0; i < pts.size(); i++)
         delete pts[i];
 }
 
-template<typename T>
-static vector <T>
-elemwise_sum(const vector <T> &a, const vector <T> &b) {
+template <typename T>
+static vector<T>
+elemwise_sum(const vector<T> &a, const vector<T> &b)
+{
     INVARIANT(a.size() == b.size());
-    vector <T> ret(a.size());
+    vector<T> ret(a.size());
     for (size_t i = 0; i < a.size(); i++)
         ret[i] = a[i] + b[i];
     return ret;
 }
 
-template<typename K, typename V>
+template <typename K, typename V>
 static void
-map_agg(map <K, V> &agg, const map <K, V> &m) {
+map_agg(map<K, V> &agg, const map<K, V> &m)
+{
     for (auto it = m.begin();
          it != m.end(); ++it)
         agg[it->first] += it->second;
 }
 
 // returns <free_bytes, total_bytes>
-static pair <uint64_t, uint64_t>
-get_system_memory_info() {
+static pair<uint64_t, uint64_t>
+get_system_memory_info()
+{
     struct sysinfo inf;
     sysinfo(&inf);
     return make_pair(inf.mem_unit * inf.freeram, inf.mem_unit * inf.totalram);
 }
 
 static bool
-clear_file(const char *name) {
+clear_file(const char *name)
+{
     ofstream ofs(name);
     ofs.close();
     return true;
@@ -96,7 +127,8 @@ static void
 write_cb(void *p, const char *s) UNUSED;
 
 static void
-write_cb(void *p, const char *s) {
+write_cb(void *p, const char *s)
+{
     const char *f = "jemalloc.stats";
     static bool s_clear_file UNUSED = clear_file(f);
     ofstream ofs(f, ofstream::app);
@@ -109,8 +141,8 @@ static event_avg_counter evt_avg_abort_spins("avg_abort_spins");
 
 extern "C" void Client_changeDistribution(const int QPS);
 
-void
-bench_worker::run() {
+void bench_worker::run()
+{
     std::cout << "Starting Worker" << std::endl;
 
     if (set_core_id)
@@ -135,34 +167,46 @@ bench_worker::run() {
 
     int count = 0;
 
-    std::vector <std::vector<float>> accumulator{};
+    std::vector<std::vector<float>> accumulator{};
 
-    while (running) {
-        while (ntxn_commits < ops_per_worker) {
+    double targetLat = 5.0;
+    PIDController controller(0.01, 0.001, 0.005, targetLat);
+    auto begin  = chrono::high_resolution_clock::now();
+
+    while (running)
+    {
+        while (ntxn_commits < ops_per_worker)
+        {
             Request *req;
             tBenchRecvReq(reinterpret_cast<void **>(&req));
             ReqType type = req->type;
             Response resp;
-            retry:
+        retry:
             timer t;
             const unsigned long old_seed = r.get_seed();
             const auto ret = workload[req->type].fn(this);
-            if (likely(ret.first)) {
+            if (likely(ret.first))
+            {
                 ++ntxn_commits;
                 latency_numer_us += t.lap();
                 backoff_shifts >>= 1;
                 resp.success = true;
                 tBenchSendResp(&resp, sizeof(resp));
-            } else {
+            }
+            else
+            {
                 ++ntxn_aborts;
-                if (retry_aborted_transaction && running) {
-                    if (backoff_aborted_transaction) {
+                if (retry_aborted_transaction && running)
+                {
+                    if (backoff_aborted_transaction)
+                    {
                         if (backoff_shifts < 63)
                             backoff_shifts++;
                         uint64_t spins = 1UL << backoff_shifts;
                         spins *= 100; // XXX: tuned pretty arbitrarily
                         evt_avg_abort_spins.offer(spins);
-                        while (spins) {
+                        while (spins)
+                        {
                             nop_pause();
                             spins--;
                         }
@@ -175,41 +219,49 @@ bench_worker::run() {
             txn_counts[type]++;
         }
 
-        float percentile = 99.0;                             // TODO: hardcoded
+        float percentile = 99.0; // TODO: hardcoded
         float var = tBenchServerDumpVariance();
         float m = tBenchServerDumpMean();
         float latency = tBenchServerDumpLatency(percentile); // Warning: this clears the sjrnTimes, cannot use after
 
         // @note Static just to keep it local here.
         static size_t step_index = 0;
-        static const std::vector<int> steps = 
-        {
-            8000,
-            8500,
-            9000,
-            9500,
-            10000,
-        };
+        static const std::vector<int> steps =
+            {
+                8000,
+                8500,
+                9000,
+                9500,
+                10000,
+            };
 
         std::cout << std::fixed << std::setprecision(4) << "Tail Latency : " << latency * 1e-6 << ", Mean: " << m * 1e-6
                   << ", Std: " << sqrt(var) * 1e-6 << std::endl;
 
 
+        auto end = chrono::high_resolution_clock::now();
+        chrono::duration<double> dt = end - begin;
+        double error = targetLat - latency * 1e-6;
+        double new_qps = controller.update(error, dt.count());
+        auto start = chrono::high_resolution_clock::now();
+
         // Checks if warmup finished
-        if (tBenchServerGetStatus() == 2) 
-        { 
+        if (tBenchServerGetStatus() == 2)
+        {
             accumulator.push_back({latency, m, sqrt(var)});
             const float Z = 1.96; // Z-score for 95-th confidence interval
-            const float E = 1e4; // Tolerance from true mean, here 100 microseconds
+            const float E = 1e4;  // Tolerance from true mean, here 100 microseconds
 
             const uint64_t new_sample = Z * Z * var / (E * E);
             const uint64_t new_size = std::ceil((new_sample * 0.5 + ops_per_worker * 0.5) / 1000) * 1000;
 
-            ops_per_worker = new_size; // damping updates
+            ops_per_worker = new_size;                                // damping updates
             ops_per_worker = std::min<uint64_t>(2e5, ops_per_worker); // Set a maximum window
 
             std::cout << "Iteration: " << count << ", Ops: " << new_size << ", New sample size : " << ops_per_worker
                       << std::endl;
+
+            Client_changeDistribution(new_qps);
         }
 
         const bool bHasConverged = convergence_model->aggregate(latency);
@@ -222,12 +274,13 @@ bench_worker::run() {
             }
             else
             {
-                const auto new_qps = steps[step_index++];
-                Client_changeDistribution(new_qps);
+                // const auto new_qps = steps[step_index++];
+                step_index++;
             }
         }
 
-        if (count == 50) {
+        if (count == 50)
+        {
             running = false;
         }
 
@@ -239,42 +292,48 @@ bench_worker::run() {
 
     // Code to record latencies
     std::ofstream outputFile("../output/test.txt");
-    if (outputFile.is_open()) {
-        for (const auto &it: accumulator) {
-            for (const float &m: it) {
+    if (outputFile.is_open())
+    {
+        for (const auto &it : accumulator)
+        {
+            for (const float &m : it)
+            {
                 outputFile << m * 1e-6 << " ";
             }
-            outputFile << "\n";  // Add a newline at the end of each line
+            outputFile << "\n"; // Add a newline at the end of each line
         }
         /*for (size_t i = 0; i < accumulator.size(); ++i) {
             outputFile << accumulator[i];
             outputFile << "\n";
         }*/
         outputFile.close();
-    } else {
+    }
+    else
+    {
         std::cout << "CANNOT OPEN FILE" << std::endl;
     }
 }
 
-void
-bench_runner::run() {
+void bench_runner::run()
+{
     tBenchServerInit(nthreads);
 
     // load data
     const vector<bench_loader *> loaders = make_loaders();
     {
         spin_barrier b(loaders.size());
-        const pair <uint64_t, uint64_t> mem_info_before = get_system_memory_info();
+        const pair<uint64_t, uint64_t> mem_info_before = get_system_memory_info();
         {
             scoped_timer t("dataloading", verbose);
-            for (auto loader: loaders) {
+            for (auto loader : loaders)
+            {
                 loader->set_barrier(b);
                 loader->start();
             }
-            for (auto loader: loaders)
+            for (auto loader : loaders)
                 loader->join();
         }
-        const pair <uint64_t, uint64_t> mem_info_after = get_system_memory_info();
+        const pair<uint64_t, uint64_t> mem_info_after = get_system_memory_info();
         const int64_t delta = int64_t(mem_info_before.first) - int64_t(mem_info_after.first); // free mem
         const double delta_mb = double(delta) / 1048576.0;
         if (verbose)
@@ -286,13 +345,14 @@ bench_runner::run() {
         const auto persisted_info = db->get_ntxn_persisted();
         if (get<0>(persisted_info) != get<1>(persisted_info))
             cerr << "ERROR: " << persisted_info << endl;
-        //ALWAYS_ASSERT(get<0>(persisted_info) == get<1>(persisted_info));
+        // ALWAYS_ASSERT(get<0>(persisted_info) == get<1>(persisted_info));
         if (verbose)
             cerr << persisted_info << " txns persisted in loading phase" << endl;
     }
     db->reset_ntxn_persisted();
 
-    if (!no_reset_counters) {
+    if (!no_reset_counters)
+    {
         event_counter::reset_all_counters(); // XXX: for now - we really should have a before/after loading
         PERF_EXPR(scopedperf::perfsum_base::resetall());
     }
@@ -300,15 +360,18 @@ bench_runner::run() {
         const auto persisted_info = db->get_ntxn_persisted();
         if (get<0>(persisted_info) != 0 ||
             get<1>(persisted_info) != 0 ||
-            get<2>(persisted_info) != 0.0) {
+            get<2>(persisted_info) != 0.0)
+        {
             cerr << persisted_info << endl;
             ALWAYS_ASSERT(false);
         }
     }
 
-    map <string, size_t> table_sizes_before;
-    if (verbose) {
-        for (auto &open_table: open_tables) {
+    map<string, size_t> table_sizes_before;
+    if (verbose)
+    {
+        for (auto &open_table : open_tables)
+        {
             scoped_rcu_region guard;
             const size_t s = open_table.second->size();
             cerr << "table " << open_table.first << " size " << s << endl;
@@ -317,7 +380,7 @@ bench_runner::run() {
         cerr << "starting benchmark..." << endl;
     }
 
-    const pair <uint64_t, uint64_t> mem_info_before = get_system_memory_info();
+    const pair<uint64_t, uint64_t> mem_info_before = get_system_memory_info();
 
     // ------------------------------------------------------------------
 
@@ -327,7 +390,7 @@ bench_runner::run() {
 
     const vector<bench_worker *> workers = make_workers();
     ALWAYS_ASSERT(!workers.empty());
-    for (auto worker: workers)
+    for (auto worker : workers)
         worker->start();
 
     barrier_a.wait_for(); // wait for all threads to start up
@@ -348,7 +411,8 @@ bench_runner::run() {
     size_t n_commits = 0;
     size_t n_aborts = 0;
     uint64_t latency_numer_us = 0;
-    for (size_t i = 0; i < nthreads; i++) {
+    for (size_t i = 0; i < nthreads; i++)
+    {
         n_commits += workers[i]->get_ntxn_commits();
         n_aborts += workers[i]->get_ntxn_aborts();
         latency_numer_us += workers[i]->get_latency_numer_us();
@@ -372,7 +436,6 @@ bench_runner::run() {
     // TODO here is the logic to stop the workload when we have converged
     // ------------------------------------------------------------------
 
-
     // various sanity checks
     ALWAYS_ASSERT(get<0>(persisted_info) == get<1>(persisted_info));
     // not == b/c persisted_info does not count read-only txns
@@ -393,30 +456,33 @@ bench_runner::run() {
     // run to be durable
     const double agg_persist_throughput = double(n_commits) / elapsed_sec;
     const double avg_per_core_persist_throughput =
-            agg_persist_throughput / double(workers.size());
+        agg_persist_throughput / double(workers.size());
 
     // XXX(stephentu): latency currently doesn't account for read-only txns
     const double avg_latency_us =
-            double(latency_numer_us) / double(n_commits);
+        double(latency_numer_us) / double(n_commits);
     const double avg_latency_ms = avg_latency_us / 1000.0;
     const double avg_persist_latency_ms =
-            get<2>(persisted_info) / 1000.0;
+        get<2>(persisted_info) / 1000.0;
 
-    if (verbose) {
-        const pair <uint64_t, uint64_t> mem_info_after = get_system_memory_info();
+    if (verbose)
+    {
+        const pair<uint64_t, uint64_t> mem_info_after = get_system_memory_info();
         const int64_t delta = int64_t(mem_info_before.first) - int64_t(mem_info_after.first); // free mem
         const double delta_mb = double(delta) / 1048576.0;
-        map <string, size_t> agg_txn_counts = workers[0]->get_txn_counts();
+        map<string, size_t> agg_txn_counts = workers[0]->get_txn_counts();
         ssize_t size_delta = workers[0]->get_size_delta();
-        for (size_t i = 1; i < workers.size(); i++) {
+        for (size_t i = 1; i < workers.size(); i++)
+        {
             map_agg(agg_txn_counts, workers[i]->get_txn_counts());
             size_delta += workers[i]->get_size_delta();
         }
         const double size_delta_mb = double(size_delta) / 1048576.0;
-        map <string, counter_data> ctrs = event_counter::get_all_counters();
+        map<string, counter_data> ctrs = event_counter::get_all_counters();
 
         cerr << "--- table statistics ---" << endl;
-        for (auto &open_table: open_tables) {
+        for (auto &open_table : open_tables)
+        {
             scoped_rcu_region guard;
             const size_t s = open_table.second->size();
             const ssize_t delta = ssize_t(s) - ssize_t(table_sizes_before[open_table.first]);
@@ -430,13 +496,14 @@ bench_runner::run() {
 #ifdef ENABLE_BENCH_TXN_COUNTERS
         cerr << "--- txn counter statistics ---" << endl;
         {
-          // take from thread 0 for now
-          abstract_db::txn_counter_map agg = workers[0]->get_local_txn_counters();
-          for (auto &p : agg) {
-            cerr << p.first << ":" << endl;
-            for (auto &q : p.second)
-              cerr << "  " << q.first << " : " << q.second << endl;
-          }
+            // take from thread 0 for now
+            abstract_db::txn_counter_map agg = workers[0]->get_local_txn_counters();
+            for (auto &p : agg)
+            {
+                cerr << p.first << ":" << endl;
+                for (auto &q : p.second)
+                    cerr << "  " << q.first << " : " << q.second << endl;
+            }
         }
 #endif
         cerr << "--- benchmark statistics ---" << endl;
@@ -457,14 +524,13 @@ bench_runner::run() {
         cerr << "avg_per_core_abort_rate: " << avg_per_core_abort_rate << " aborts/sec/core" << endl;
         cerr << "txn breakdown: " << format_list(agg_txn_counts.begin(), agg_txn_counts.end()) << endl;
         cerr << "--- system counters (for benchmark) ---" << endl;
-        for (auto &ctr: ctrs)
+        for (auto &ctr : ctrs)
             cerr << ctr.first << ": " << ctr.second << endl;
         cerr << "--- perf counters (if enabled, for benchmark) ---" << endl;
         PERF_EXPR(scopedperf::perfsum_base::printall());
         cerr << "--- allocator stats ---" << endl;
         ::allocator::DumpStats();
         cerr << "---------------------------------------" << endl;
-
     }
 
     // output for plotting script
@@ -478,15 +544,16 @@ bench_runner::run() {
     if (!slow_exit)
         return;
 
-    map <string, uint64_t> agg_stats;
-    for (auto &open_table: open_tables) {
+    map<string, uint64_t> agg_stats;
+    for (auto &open_table : open_tables)
+    {
         map_agg(agg_stats, open_table.second->clear());
         delete open_table.second;
     }
-    if (verbose) {
-        for (auto &p: agg_stats)
+    if (verbose)
+    {
+        for (auto &p : agg_stats)
             cerr << p.first << " : " << p.second << endl;
-
     }
     open_tables.clear();
 
@@ -494,31 +561,32 @@ bench_runner::run() {
     delete_pointers(workers); // moved up in loop
 }
 
-template<typename K, typename V>
-struct map_maxer {
-    typedef map <K, V> map_type;
+template <typename K, typename V>
+struct map_maxer
+{
+    typedef map<K, V> map_type;
 
     void
-    operator()(map_type &agg, const map_type &m) const {
+    operator()(map_type &agg, const map_type &m) const
+    {
         for (typename map_type::const_iterator it = m.begin();
              it != m.end(); ++it)
             agg[it->first] = std::max(agg[it->first], it->second);
     }
 };
 
-
 #ifdef ENABLE_BENCH_TXN_COUNTERS
-void
-bench_worker::measure_txn_counters(void *txn, const char *txn_name)
+void bench_worker::measure_txn_counters(void *txn, const char *txn_name)
 {
-  auto ret = db->get_txn_counters(txn);
-  map_maxer<string, uint64_t>()(local_txn_counters[txn_name], ret);
+    auto ret = db->get_txn_counters(txn);
+    map_maxer<string, uint64_t>()(local_txn_counters[txn_name], ret);
 }
 #endif
 
-map <string, size_t>
-bench_worker::get_txn_counts() const {
-    map <string, size_t> m;
+map<string, size_t>
+bench_worker::get_txn_counts() const
+{
+    map<string, size_t> m;
     const workload_desc_vec workload = get_workload();
     for (size_t i = 0; i < txn_counts.size(); i++)
         m[workload[i].name] = txn_counts[i];
