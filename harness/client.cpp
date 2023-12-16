@@ -70,39 +70,13 @@ void Client::overrideIfDirty() {
 
         dist = new ExpDist(lambda, seed, curNs);
         std::cout << "-------------- Changing QPS to: " << lambda * 1e9 << " --------------" << std::endl;
+        //aggregateSjrn.clear();
+        //std::cout << "Resetting window.." << std::endl;
     }
 }
-
-double Client::getMean() {
-    double m = 0;
-    for (uint64_t value: sjrnTimes) {
-        m += static_cast<double>(value);
-    }
-    m /= static_cast<double>(sjrnTimes.size());
-
-    return m;
-}
-
-size_t Client::getSampleSize() {
-    return sjrnTimes.size();
-}
-
-double Client::getVariance() {
-    double mean = getMean();
-
-    double sumSqr = 0;
-    for (uint64_t value: sjrnTimes) {
-        double diff = value - mean;
-        sumSqr += diff * diff;
-    }
-
-    double var = sumSqr / (sjrnTimes.size() - 1);
-    return var;
-}
-
 
 double Client::getAggregateVariance(int window, double mean) {
-    if (aggregateSjrn.size() == window) {
+    if (aggregateSjrn.size() == window || status == WARMUP) {
 
         double sumSqr = 0;
         size_t size = 0;
@@ -121,7 +95,7 @@ double Client::getAggregateVariance(int window, double mean) {
 
 double Client::getAggregateMean(int window) {
     aggregateSjrn.push_back(sjrnTimes);
-    if (aggregateSjrn.size() == window) {
+    if (aggregateSjrn.size() == window || status == WARMUP) {
         double m = 0;
         size_t size = 0;
         for (const auto &it: aggregateSjrn) {
@@ -136,8 +110,14 @@ double Client::getAggregateMean(int window) {
     return -1;
 }
 
+float Client::getSampleLatency(float percentile){
+    sort(sjrnTimes.begin(), sjrnTimes.end());
+    uint64_t lat = sjrnTimes[(percentile / 100) * sjrnTimes.size()];
+    return (float) lat;
+}
+
 double Client::getAggregateLatency(float percentile, int window) {
-    if (aggregateSjrn.size() == window) {
+    if (aggregateSjrn.size() == window || status == WARMUP) {
         std::vector<int> flatSjrn;
         for (const auto &v: aggregateSjrn) {
             flatSjrn.insert(flatSjrn.end(), v.begin(), v.end());
@@ -161,16 +141,19 @@ double Client::getAggregateLatency(float percentile, int window) {
 float Client::dumpLatency(float percentile) {
     sort(sjrnTimes.begin(), sjrnTimes.end());
     uint64_t lat = sjrnTimes[(percentile / 100) * sjrnTimes.size()];
-    aggregateSjrn.push_back(sjrnTimes);
     sjrnTimes.clear();
     queueTimes.clear();
     svcTimes.clear();
-    // TODO also parse, queue times and service times??
+    // also parse, queue times and service times??
     return (float) lat;
 }
 
 ClientStatus Client::getStatus() {
     return status;
+}
+
+size_t Client::QPS() {
+    return lambda * 1e9;
 }
 
 // ###              LOADBOIZ end change
@@ -275,6 +258,8 @@ void Client::_startRoi() {
     assert(status == WARMUP);
     status = ROI;
 
+    std::cout << "Resetting window.." << std::endl;
+    aggregateSjrn.clear();
     queueTimes.clear();
     svcTimes.clear();
     sjrnTimes.clear();

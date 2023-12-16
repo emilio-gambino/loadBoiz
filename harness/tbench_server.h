@@ -33,17 +33,15 @@ size_t tBenchRecvReq(void **data);
 
 void tBenchSendResp(const void *data, size_t size);
 
-float tBenchServerDumpLatency(float percentile);
-
-double tBenchServerDumpVariance();
-
-double tBenchServerDumpMean();
+size_t getQPS();
 
 int tBenchServerGetStatus();
 
 size_t tBenchServerDumpSampleSize();
 
 size_t tBenchServerDumpAggregateLatency(float percentile, int window);
+
+float tBenchServerGetSampleLatency(float percentile);
 
 double tBenchServerDumpAggregateVariance(int window, double mean);
 

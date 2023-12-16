@@ -138,18 +138,14 @@ double tBenchServerDumpAggregateMean(int window) {
     return server->getAggregateMean(window);
 }
 
-size_t tBenchServerDumpSampleSize() {
-    return server->getSampleSize();
-}
-
-double tBenchServerDumpVariance() {
-    return server->getVariance();
-}
-
-double tBenchServerDumpMean() {
-    return server->getMean();
+float tBenchServerGetSampleLatency(float percentile) {
+    return server->getSampleLatency(percentile);
 }
 
 int tBenchServerGetStatus() {
     return server->getStatus();
+}
+
+size_t getQPS() {
+    return server->QPS();
 }

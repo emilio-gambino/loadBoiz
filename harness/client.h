@@ -69,12 +69,12 @@ class Client {
         /* Changes the distribution of all clients. */
         static void changeDistribution(const double QPS);
         enum ClientStatus getStatus();
-        size_t getSampleSize();
-        double getVariance();
-        double getMean();
+        size_t QPS();
         double getAggregateVariance(int window, double mean);
         double getAggregateMean(int window);
         double getAggregateLatency(float percentile, int window);
+        float getSampleLatency(float percentile);
+
     protected:
         void overrideIfDirty();
         static double lambda_override;

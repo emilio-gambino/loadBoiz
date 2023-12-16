@@ -40,21 +40,10 @@ static float get_variation_coefficient(const T &values) {
         if (var == 0.f) {
             return 0.f;
         }
-
-        const auto var = get_variance(values);
-        const auto mean = get_mean(values);
-
-        if (mean == 0.f) {
-            if (var == 0.f) {
-                return 0.f;
-            }
-            return 100.f;
-        }
-
-        return std::sqrt(var) / mean * 100.f;
+        return 100.f;
     }
 
-    return 0;
+    return std::sqrt(var) / mean * 100.f;
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -90,25 +79,14 @@ bool VariationCoefficientModel::aggregate(const float tail_latency) {
     const float wanted_vc = m_vc_conv <= 0.f ? m_vc_fun_conv(m_epoch) : m_vc_conv;
 
     const auto vc = get_variation_coefficient(tail_latencies);
-    /*std::cout
-      << "Convergence status:\n"
-      << " - t_lat: " << tail_latency << "\n"
-      << " - compute on " << tail_latencies.size() << " elements (windows = " << m_window << ").\n"
-      << " - mean: " << get_mean(tail_latencies) << "\n"
-      << " - var: " << get_variance(tail_latencies) << "\n"
-      << " - wanted vc: < " << wanted_vc << "\n"
-      << " - vc: " << vc << "\n";*/
 
-    /*std::cout
-      << "Convergence status:\n"
-      << " - t_lat: " << tail_latency << "\n"
-      << " - mean: " << get_mean(tail_latencies) << "\n"
-      << " - var: " << get_variance(tail_latencies) << "\n"
-      << " - vc: " << vc << "\n"
-      << " - wanted vc < " << wanted_vc << "\n";*/
+    /*std::cout << "Convergence status:\n"
+            << " - t_lat: " << tail_latency << "\n"
+            << " - compute on " << tail_latencies.size() << " elements (windows = " << m_window << ").\n"
+            << " - mean: " << get_mean(tail_latencies) << "\n"
+            << " - var: " << get_variance(tail_latencies) << "\n"
+            << " - wanted vc: < " << wanted_vc << "\n"
+            << " - vc: " << vc << "\n";*/
     std::cout << "VC: " << vc << std::endl;
-
-
     return vc < wanted_vc;
 }
-
