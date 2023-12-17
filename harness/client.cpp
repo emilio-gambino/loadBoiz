@@ -98,12 +98,6 @@ double Client::getAggregateVariance(double mean) {
     float ac = 0;
     for (auto it = bins.begin(); it != bins.end(); ++it) {
         ac += (it->first - mean) * (it->first - mean) * it->second;
-        if (it->first - mean == 0 || it->second == 0) {
-            std::cout << "AAAAH" << std::endl;
-        }
-    }
-    if(ac == 0) {
-        std::cout << "AAAAAAACCC IS ZERO, bins size: " << bins.size() << std::endl;
     }
     return ac / reqs;
 }
