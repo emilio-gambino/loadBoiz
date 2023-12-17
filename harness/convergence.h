@@ -10,7 +10,7 @@ public:
    * Aggregates a tail latency.
    * @return If we are satisfying the convergence conditions.
   */
-  virtual bool aggregate(const float tail_latency) = 0;
+  virtual bool aggregate(const float tail_latency, bool ready) = 0;
 
   /**
    * Resets the model to its base state.
@@ -26,7 +26,7 @@ public:
   VariationCoefficientModel(const float vc_conv = 10.f, const int min_samples = 10, const int window = 5);
   VariationCoefficientModel(VCFunction vc_conv, const int min_samples, const int window);
 
-  virtual bool aggregate(const float tail_latency) override;
+  virtual bool aggregate(const float tail_latency, bool ready) override;
   virtual void reset() override;
 
 private:

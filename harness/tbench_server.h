@@ -18,12 +18,13 @@
 #define __TBENCH_SERVER_H
 
 #include <stdlib.h>
+#include <cstdint>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-void tBenchServerInit(int nthreads);
+void tBenchServerInit(int nthreads, uint64_t precision);
 
 void tBenchServerThreadStart();
 
@@ -35,17 +36,19 @@ void tBenchSendResp(const void *data, size_t size);
 
 size_t getQPS();
 
+uint64_t getReqs();
+
 int tBenchServerGetStatus();
 
 size_t tBenchServerDumpSampleSize();
 
-size_t tBenchServerDumpAggregateLatency(float percentile, int window);
+size_t tBenchServerDumpAggregateLatency(float percentile);
 
 float tBenchServerGetSampleLatency(float percentile);
 
-double tBenchServerDumpAggregateVariance(int window, double mean);
+double tBenchServerDumpAggregateVariance(double mean);
 
-double tBenchServerDumpAggregateMean(int window);
+double tBenchServerDumpAggregateMean();
 
 #ifdef __cplusplus
 }

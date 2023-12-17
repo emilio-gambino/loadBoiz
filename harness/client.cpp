@@ -70,54 +70,80 @@ void Client::overrideIfDirty() {
 
         dist = new ExpDist(lambda, seed, curNs);
         std::cout << "-------------- Changing QPS to: " << lambda * 1e9 << " --------------" << std::endl;
-        //aggregateSjrn.clear();
-        //std::cout << "Resetting window.." << std::endl;
+        std::cout << "Resetting state.." << std::endl;
+        bins.clear();
+        reqs = 0;
+        warmup_count = 9;
     }
 }
 
-double Client::getAggregateVariance(int window, double mean) {
-    if (aggregateSjrn.size() == window || status == WARMUP) {
-
-        double sumSqr = 0;
-        size_t size = 0;
-        for (const auto &it: aggregateSjrn) {
-            for (const double &v: it) {
-                double diff = v - mean;
-                sumSqr += diff * diff;
-            }
-            size += it.size();
+double Client::getAggregateMean() {
+    if(warmup_count > 0){
+        std::cout << warmup_count << " " << std::flush;
+        warmup_count--;
+        if(warmup_count == 0) {
+            std::cout << std::endl;
+            bins.clear();
         }
-        double var = sumSqr / (size - 1);
-        return var;
+        return -1;
     }
-    return -1;
+    uint64_t m = 0;
+    for (auto it = bins.begin(); it != bins.end(); ++it) {
+        m += it->first * it->second;
+    }
+    return m / reqs;
 }
 
-double Client::getAggregateMean(int window) {
-    aggregateSjrn.push_back(sjrnTimes);
-    if (aggregateSjrn.size() == window || status == WARMUP) {
-        double m = 0;
-        size_t size = 0;
-        for (const auto &it: aggregateSjrn) {
-            for (const double &v: it) {
-                m += v;
-            }
-            size += it.size();
+double Client::getAggregateVariance(double mean) {
+    float ac = 0;
+    for (auto it = bins.begin(); it != bins.end(); ++it) {
+        ac += (it->first - mean) * (it->first - mean) * it->second;
+        if (it->first - mean == 0 || it->second == 0) {
+            std::cout << "AAAAH" << std::endl;
         }
-        m /= size;
-        return m;
     }
-    return -1;
+    if(ac == 0) {
+        std::cout << "AAAAAAACCC IS ZERO, bins size: " << bins.size() << std::endl;
+    }
+    return ac / reqs;
 }
 
-float Client::getSampleLatency(float percentile){
+float Client::getSampleVariance() {
+    float mean = 0;
+    for (auto it : sjrnTimes) {
+        mean += it;
+    }
+    mean = mean/sjrnTimes.size();
+    std::cout << "Sample mean: " << mean * 1e-6 << std::endl;
+
+    float sumSqr = 0;
+    for(auto it: sjrnTimes){
+        sumSqr += (it - mean) * (it - mean);
+    }
+    std::cout << "Sample variance: " << sumSqr / sjrnTimes.size() * 1e-6 << std::endl;
+
+    return 0;
+}
+
+float Client::getSampleLatency(float percentile) {
     sort(sjrnTimes.begin(), sjrnTimes.end());
     uint64_t lat = sjrnTimes[(percentile / 100) * sjrnTimes.size()];
     return (float) lat;
 }
 
-double Client::getAggregateLatency(float percentile, int window) {
-    if (aggregateSjrn.size() == window || status == WARMUP) {
+double Client::getAggregateLatency(float percentile) {
+    uint64_t acc = 0;
+    uint64_t lat;
+    for (auto it = bins.rbegin(); it != bins.rend(); ++it) {
+        acc += it->second;
+        if(acc >= reqs * (1 - percentile/100)){
+            lat = it->first;
+            break;
+        }
+    }
+    sjrnTimes.clear();
+    return lat;
+    /*if (aggregateSjrn.size() == window || status == WARMUP) {
         std::vector<int> flatSjrn;
         for (const auto &v: aggregateSjrn) {
             flatSjrn.insert(flatSjrn.end(), v.begin(), v.end());
@@ -132,9 +158,7 @@ double Client::getAggregateLatency(float percentile, int window) {
         return lat;
     }
     sjrnTimes.clear();
-    queueTimes.clear();
-    svcTimes.clear();
-    return -1;
+    return -1;*/
 }
 
 // input float percentile : a number between 1 and 100
@@ -156,10 +180,14 @@ size_t Client::QPS() {
     return lambda * 1e9;
 }
 
+uint64_t Client::Reqs(){
+    return reqs;
+}
+
 // ###              LOADBOIZ end change
 // ######################################################################
 
-Client::Client(int _nthreads) {
+Client::Client(int _nthreads, uint64_t prec) {
     status = INIT;
 
     nthreads = _nthreads;
@@ -174,6 +202,7 @@ Client::Client(int _nthreads) {
     dist = nullptr; // Will get initialized in startReq()
 
     startedReqs = 0;
+    precision = prec;
 
 
     tBenchClientInit();
@@ -235,17 +264,23 @@ void Client::finiReq(Response *resp) {
     assert(it != inFlightReqs.end());
     Request *req = it->second;
 
-    if (status == ROI || status == WARMUP) {
+    if (status == ROI || status == WARMUP || warmup_count > 0) {
         uint64_t curNs = getCurNs();
-
         assert(curNs > req->genNs);
 
         uint64_t sjrn = curNs - req->genNs;
         assert(sjrn >= resp->svcNs);
-        uint64_t qtime = sjrn - resp->svcNs;
+        //uint64_t qtime = sjrn - resp->svcNs;
 
-        queueTimes.push_back(qtime);
-        svcTimes.push_back(resp->svcNs);
+        uint64_t i = (sjrn/precision) * precision;
+        if(!bins.count(i)) {
+            bins[i] = 0;
+        }
+        bins[i]++;
+        reqs++;
+
+        //queueTimes.push_back(qtime);
+        //svcTimes.push_back(resp->svcNs);
         sjrnTimes.push_back(sjrn);
     }
 
@@ -258,7 +293,9 @@ void Client::_startRoi() {
     assert(status == WARMUP);
     status = ROI;
 
-    std::cout << "Resetting window.." << std::endl;
+    bins.clear();
+    reqs = 0;
+
     aggregateSjrn.clear();
     queueTimes.clear();
     svcTimes.clear();
@@ -290,7 +327,7 @@ void Client::dumpStats() {
 /*******************************************************************************
  * Networked Client
  *******************************************************************************/
-NetworkedClient::NetworkedClient(int nthreads, std::string serverip,
+/*NetworkedClient::NetworkedClient(int nthreads, std::string serverip,
                                  int serverport) : Client(nthreads) {
     pthread_mutex_init(&sendLock, nullptr);
     pthread_mutex_init(&recvLock, nullptr);
@@ -375,5 +412,5 @@ bool NetworkedClient::recv(Response *resp) {
     pthread_mutex_unlock(&recvLock);
 
     return true;
-}
+}*/
 

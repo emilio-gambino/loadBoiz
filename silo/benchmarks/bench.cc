@@ -53,9 +53,13 @@ int retry_aborted_transaction = 0;
 int no_reset_counters = 0;
 int backoff_aborted_transaction = 0;
 
-std::vector<std::vector<float>> accumulator{};
-std::vector<std::vector<size_t>> QPS_changes{};
+std::vector<std::vector<uint64_t>> accumulator{};
+std::vector<std::vector<uint64_t>> QPS_changes{};
 auto start_time = std::chrono::high_resolution_clock::now();
+float percentile = 99.0;
+auto tolerance = 0.2 * 1e6;
+uint64_t INIT_QPS = getOpt<double>("TBENCH_QPS", 1000.0);
+float TAIL_LATENCY_CONSTRAINT = 10 * 1e6; // in nanoseconds, here 10ms
 
 template<typename T>
 static void
@@ -124,7 +128,7 @@ void interruptHandler(int signum){
     std::ofstream outputFile("../output/test.txt");
     if (outputFile.is_open()) {
         for (const auto &it: accumulator) {
-            for (const float &m: it) {
+            for (const auto &m: it) {
                 outputFile << m * 1e-6 << " ";
             }
             outputFile << "\n";  // Add a newline at the end of each line
@@ -143,6 +147,13 @@ void interruptHandler(int signum){
         }
 
         out.close();
+    } else {
+        std::cout << "CANNOT OPEN FILE" << std::endl;
+    }
+    std::ofstream out2("../output/args.txt");
+    if (out2.is_open()) {
+        out2 << percentile << " " << INIT_QPS << " " << duration.count() << " " << tolerance * 1e-6 << " " << TAIL_LATENCY_CONSTRAINT * 1e-6 << std::endl;
+        out2.close();
     } else {
         std::cout << "CANNOT OPEN FILE" << std::endl;
     }
@@ -172,11 +183,11 @@ bench_worker::run() {
     const double baseLambda = getOpt<double>("TBENCH_QPS", 1000.0);
     Client_changeDistribution(baseLambda);
 
-    const int WINDOW_SIZE = 8;
-    const int CONVERGENCE_WINDOW = 8;
+    const int MIN_CONVERGENCE = 5;
+    const int CONVERGENCE_WINDOW = 10;
     std::unique_ptr <IConvergenceModel> convergence_model(
-            new VariationCoefficientModel(15.f, WINDOW_SIZE, CONVERGENCE_WINDOW));
-    const float TAIL_LATENCY_CONSTRAINT = 8 * 1e6; // in nanoseconds, here 10ms
+            new VariationCoefficientModel(3.f, 5, CONVERGENCE_WINDOW));
+    TAIL_LATENCY_CONSTRAINT = 8 * 1e6; // in nanoseconds, here 10ms
 
     size_t count = 0;
 
@@ -220,12 +231,12 @@ bench_worker::run() {
             txn_counts[type]++;
         }
 
-        float percentile = 99.0;
-        float m = tBenchServerDumpAggregateMean(WINDOW_SIZE);
-        float var = tBenchServerDumpAggregateVariance(WINDOW_SIZE, m);
-
-        float lat = tBenchServerGetSampleLatency(percentile);
-        float latency = tBenchServerDumpAggregateLatency(percentile, WINDOW_SIZE);
+        percentile = 99.0;
+        tolerance = 0.5 * 1e6;
+        uint64_t m = tBenchServerDumpAggregateMean();
+        uint64_t var = tBenchServerDumpAggregateVariance(m);
+        uint64_t lat = tBenchServerGetSampleLatency(percentile);
+        uint64_t latency = tBenchServerDumpAggregateLatency(percentile);
 
 
         if (tBenchServerGetStatus() != 2) {
@@ -240,47 +251,44 @@ bench_worker::run() {
             continue;
         }
 
-        accumulator.push_back({latency, m, sqrt(var)});
-
+        accumulator.push_back({latency, m, (uint64_t)sqrt(var), lat});
 
         std::cout << std::fixed << std::setprecision(3) << "Tail Latency : " << latency * 1e-6 << "ms, Mean: "
                   << m * 1e-6 << ", Sample Latency: " << lat * 1e-6 << std::endl;
-                  //<< ", Std: " << sqrt(var) * 1e-6 << std::endl;
 
         // Compute new sample size
-        const float Z = 1.96; // Z-score for 95-th confidence interval, 2.33 for 99-th
-        const float E = 1 * 1e3; // Tolerance from true mean, here 200 microseconds
-        const uint64_t new_sample = Z * Z * var / (E * E);
-        const uint64_t new_size = std::ceil((new_sample * 0.8 + ops_per_worker * 0.2) / 1000) * 1000;
-        //ops_per_worker = new_size; // damping updates
-        //ops_per_worker = std::min<uint64_t>(100000, ops_per_worker); // Set a maximum window
-        std::cout << "Iteration: " << count << ", Ops: " << new_size << ", New sample size : " << ops_per_worker
+        const float Z = 2.33; // Z-score 1.96 for 95-th confidence interval, 2.33 for 99-th
+        uint64_t min_sample = std::ceil(Z * Z * var / (tolerance * tolerance) / 1000) * 1000;
+        uint64_t reqs = getReqs();
+
+        std::cout << "Iteration: " << count << ", Min Sample Size: " << min_sample << ", Current sample size: " << reqs+1
                   << std::endl;
 
+        bool ready = (reqs > min_sample);
+
         // Compute convergence
-        const bool bHasConverged = convergence_model->aggregate(latency);
+        const bool bHasConverged = convergence_model->aggregate(latency, ready);
         if (bHasConverged) {
             convergence_model->reset();
             auto new_qps = getQPS();
-            auto tolerance = 0.5 * 1e6;
             if (std::abs(latency - TAIL_LATENCY_CONSTRAINT) <= tolerance) {
                 std::cout << TAIL_LATENCY_CONSTRAINT * 1e-6 << std::endl;
                 std::cout << "CONVERGED, LATENCY: " << latency * 1e-6 << ", QPS: " << new_qps << std::endl;
                 running = false;
-            } else {
-                new_qps = new_qps * 0.85 + 0.15 * new_qps * TAIL_LATENCY_CONSTRAINT / latency;
-                Client_changeDistribution(new_qps);
-                QPS_changes.push_back({count, new_qps});
-            }
-            /*} else if (latency > TAIL_LATENCY_CONSTRAINT) {
-                new_qps -= 150;
-                Client_changeDistribution(new_qps);
-                QPS_changes.push_back({count, new_qps});
-            } else {
-                new_qps += 150;
+            /*} else {
+                new_qps = new_qps * 0.9 + 0.1 * new_qps * TAIL_LATENCY_CONSTRAINT / latency;
                 Client_changeDistribution(new_qps);
                 QPS_changes.push_back({count, new_qps});
             }*/
+            } else if (latency > TAIL_LATENCY_CONSTRAINT) {
+                new_qps -= 100;
+                Client_changeDistribution(new_qps);
+                QPS_changes.push_back({count, new_qps, (uint64_t)(latency * 1e-6)});
+            } else {
+                new_qps += 200;
+                Client_changeDistribution(new_qps);
+                QPS_changes.push_back({count, new_qps, (uint64_t)(latency * 1e-6)});
+            }
         }
 
         ntxn_commits = 0;
@@ -296,7 +304,7 @@ bench_worker::run() {
     std::ofstream outputFile("../output/test.txt");
     if (outputFile.is_open()) {
         for (const auto &it: accumulator) {
-            for (const float &m: it) {
+            for (const auto &m: it) {
                 outputFile << m * 1e-6 << " ";
             }
             outputFile << "\n";  // Add a newline at the end of each line
@@ -313,8 +321,14 @@ bench_worker::run() {
             }
             out << "\n";  // Add a newline at the end of each line
         }
-
         out.close();
+    } else {
+        std::cout << "CANNOT OPEN FILE" << std::endl;
+    }
+    std::ofstream out2("../output/args.txt");
+    if (out2.is_open()) {
+        out2 << percentile << " " << INIT_QPS << " " << duration.count() << " " << tolerance * 1e-6 << " " << TAIL_LATENCY_CONSTRAINT * 1e-6 << std::endl;
+        out2.close();
     } else {
         std::cout << "CANNOT OPEN FILE" << std::endl;
     }
@@ -322,7 +336,9 @@ bench_worker::run() {
 
 void
 bench_runner::run() {
-    tBenchServerInit(nthreads);
+    ops_per_worker = 15000;
+    uint64_t precision = 1e3; // histogram bin precision in nanoseconds, here 1 microsecond
+    tBenchServerInit(nthreads, precision);
 
     // load data
     const vector<bench_loader *> loaders = make_loaders();
@@ -386,7 +402,6 @@ bench_runner::run() {
     // ------------------------------------------------------------------
 
     // TODO here we need to determine the sample size for accurate tail latency measurement
-    ops_per_worker = 15000;
     // in the beginning fixed size, later depending on observed variance
 
     const vector<bench_worker *> workers = make_workers();

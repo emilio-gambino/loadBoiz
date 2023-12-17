@@ -55,7 +55,7 @@ class Server {
 
 class IntegratedServer : public Server, public Client {
     public:
-        IntegratedServer(int nthreads);
+        IntegratedServer(int nthreads, uint64_t precision);
 
         size_t recvReq(int id, void** data);
         void sendResp(int id, const void* data, size_t size);

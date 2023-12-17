@@ -62,17 +62,15 @@ void VariationCoefficientModel::reset() {
     tail_latencies.empty();
 }
 
-bool VariationCoefficientModel::aggregate(const float tail_latency) {
+bool VariationCoefficientModel::aggregate(const float tail_latency, bool ready) {
     tail_latencies.push_back(tail_latency);
     ++m_epoch;
 
-    if (m_window) {
-        while (tail_latencies.size() > m_window) {
-            tail_latencies.pop_front();
-        }
+    while (tail_latencies.size() > m_window){
+        tail_latencies.pop_front();
     }
 
-    if (m_min_samples > m_epoch) {
+    if (m_min_samples > m_epoch || !ready) {
         return false;
     }
 

@@ -42,9 +42,9 @@
 /*******************************************************************************
  * IntegratedServer
  *******************************************************************************/
-IntegratedServer::IntegratedServer(int nthreads) :
+IntegratedServer::IntegratedServer(int nthreads, uint64_t precision) :
         Server(nthreads),
-        Client(nthreads) {}
+        Client(nthreads, precision) {}
 
 size_t IntegratedServer::recvReq(int id, void **data) {
     Request *req = Client::startReq();
@@ -101,9 +101,9 @@ IntegratedServer *server;
 /*******************************************************************************
  * API
  *******************************************************************************/
-void tBenchServerInit(int nthreads) {
+void tBenchServerInit(int nthreads, uint64_t precision) {
     curTid = 0;
-    server = new IntegratedServer(nthreads);
+    server = new IntegratedServer(nthreads, precision);
 }
 
 void tBenchServerThreadStart() {
@@ -126,16 +126,16 @@ float tBenchServerDumpLatency(float percentile) {
     return server->dumpLatency(percentile);
 }
 
-size_t tBenchServerDumpAggregateLatency(float percentile, int window) {
-    return server->getAggregateLatency(percentile, window);
+size_t tBenchServerDumpAggregateLatency(float percentile) {
+    return server->getAggregateLatency(percentile);
 }
 
-double tBenchServerDumpAggregateVariance(int window, double mean) {
-    return server->getAggregateVariance(window, mean);
+double tBenchServerDumpAggregateVariance(double mean) {
+    return server->getAggregateVariance(mean);
 }
 
-double tBenchServerDumpAggregateMean(int window) {
-    return server->getAggregateMean(window);
+double tBenchServerDumpAggregateMean() {
+    return server->getAggregateMean();
 }
 
 float tBenchServerGetSampleLatency(float percentile) {
@@ -144,6 +144,10 @@ float tBenchServerGetSampleLatency(float percentile) {
 
 int tBenchServerGetStatus() {
     return server->getStatus();
+}
+
+uint64_t getReqs(){
+    return server->Reqs();
 }
 
 size_t getQPS() {

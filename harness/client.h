@@ -22,6 +22,7 @@
 
 #include <pthread.h>
 #include <stdint.h>
+#include <map>
 
 #include <string>
 #include <unordered_map>
@@ -53,7 +54,9 @@ class Client {
         void _startRoi();
 
     public:
-        Client(int nthreads);
+        //Client(int nthreads);
+
+        Client(int nthreads, uint64_t precision);
 
         Request* startReq();
         void finiReq(Response* resp);
@@ -66,23 +69,30 @@ class Client {
 // ######################################################################
 // ###              LOADBOIZ begin change
     public:
+        std::map<uint64_t, uint64_t> bins{};
+        uint64_t precision;
+        uint64_t reqs;
+        uint64_t warmup_count;
+
         /* Changes the distribution of all clients. */
         static void changeDistribution(const double QPS);
         enum ClientStatus getStatus();
         size_t QPS();
-        double getAggregateVariance(int window, double mean);
-        double getAggregateMean(int window);
-        double getAggregateLatency(float percentile, int window);
+        uint64_t Reqs();
+        double getAggregateVariance(double mean);
+        double getAggregateMean();
+        double getAggregateLatency(float percentile);
         float getSampleLatency(float percentile);
+        float getSampleVariance();
 
-    protected:
-        void overrideIfDirty();
-        static double lambda_override;
-// ###              LOADBOIZ end change
-// ######################################################################
-};
+        protected:
+            void overrideIfDirty();
+            static double lambda_override;
+            // ###              LOADBOIZ end change
+            // ######################################################################
+        };
 
-class NetworkedClient : public Client {
+/*class NetworkedClient : public Client {
     private:
         pthread_mutex_t sendLock;
         pthread_mutex_t recvLock;
@@ -95,6 +105,6 @@ class NetworkedClient : public Client {
         bool send(Request* req);
         bool recv(Response* resp);
         const std::string& errmsg() const { return error; }
-};
+};*/
 
 #endif
