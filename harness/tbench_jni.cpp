@@ -21,8 +21,8 @@
 #include "tbench_tbench.h" // jni generated
 
 JNIEXPORT void JNICALL Java_tbench_tbench_tBenchServerInit(JNIEnv* env, 
-        jclass cls, jint nthreads) {
-    tBenchServerInit(nthreads);
+        jclass cls, jint nthreads, jint precision) {
+    tBenchServerInit(nthreads, precision);
 }
 
 JNIEXPORT void JNICALL Java_tbench_tbench_tBenchServerThreadStart(JNIEnv* env, 
