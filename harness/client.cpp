@@ -46,13 +46,13 @@
 
 // Workaround to not include client.h as they define the same struct in bench.h and msg.h with
 // different members.
-void Client_changeDistribution(const int QPS) {
-    Client::changeDistribution(QPS);
+void Client_changeDistribution(const double lambda) {
+    Client::changeDistribution(lambda);
 }
 
 double Client::lambda_override; // Set in constructor
 
-void Client::changeDistribution(const int QPS) {
+void Client::changeDistribution(const double QPS) {
     lambda_override = QPS * 1e-9;
 }
 
@@ -69,13 +69,106 @@ void Client::overrideIfDirty() {
         }
 
         dist = new ExpDist(lambda, seed, curNs);
-        std::cout << "Changing QPS to: " << lambda * 1e9 << std::endl;
+        std::cout << "-------------- Changing QPS to: " << lambda * 1e9 << " --------------" << std::endl;
+        std::cout << "Resetting state.." << std::endl;
+        sjrnTimes.clear();
+        bins.clear();
+        reqs = 0;
+        warmup_count = 2;
     }
 }
+
+double Client::getAggregateMean() {
+    if (warmup_count > 0) {
+        std::cout << warmup_count << " " << std::flush;
+        warmup_count--;
+        if (warmup_count == 0) {
+            std::cout << std::endl;
+            sjrnTimes.clear();
+            bins.clear();
+            reqs = 0;
+        }
+        return -1;
+    }
+    uint64_t m = 0;
+    for (auto it = bins.begin(); it != bins.end(); ++it) {
+        m += it->first * it->second;
+    }
+    return m / reqs;
+}
+
+double Client::getAggregateVariance(double mean) {
+    float ac = 0;
+    for (auto it = bins.begin(); it != bins.end(); ++it) {
+        ac += (it->first - mean) * (it->first - mean) * it->second;
+    }
+    return ac / reqs;
+}
+
+float Client::getSampleVariance() {
+    float mean = 0;
+    for (auto it: sjrnTimes) {
+        mean += it;
+    }
+    mean = mean / sjrnTimes.size();
+    std::cout << "Sample mean: " << mean * 1e-6 << std::endl;
+
+    float sumSqr = 0;
+    for (auto it: sjrnTimes) {
+        sumSqr += (it - mean) * (it - mean);
+    }
+    std::cout << "Sample variance: " << sumSqr / sjrnTimes.size() * 1e-6 << std::endl;
+
+    return 0;
+}
+
+float Client::getSampleLatency(float percentile) {
+    sort(sjrnTimes.begin(), sjrnTimes.end());
+    uint64_t lat = sjrnTimes[(percentile / 100) * sjrnTimes.size()];
+    return (float) lat;
+}
+
+double Client::getAggregateLatency(float percentile) {
+    uint64_t acc = 0;
+    uint64_t lat;
+    for (auto it = bins.rbegin(); it != bins.rend(); ++it) {
+        acc += it->second;
+        if (acc >= reqs * (1 - percentile / 100)) {
+            lat = it->first;
+            break;
+        }
+    }
+    sjrnTimes.clear();
+    return lat;
+}
+
+// input float percentile : a number between 1 and 100
+float Client::dumpLatency(float percentile) {
+    sort(sjrnTimes.begin(), sjrnTimes.end());
+    uint64_t lat = sjrnTimes[(percentile / 100) * sjrnTimes.size()];
+    sjrnTimes.clear();
+    queueTimes.clear();
+    svcTimes.clear();
+    // also parse, queue times and service times??
+    return (float) lat;
+}
+
+ClientStatus Client::getStatus() {
+    return status;
+}
+
+size_t Client::QPS() {
+    return lambda * 1e9;
+}
+
+uint64_t Client::Reqs() {
+    return reqs;
+}
+
 // ###              LOADBOIZ end change
 // ######################################################################
 
-Client::Client(int _nthreads) {
+Client::Client(int _nthreads, uint64_t prec) {
     status = INIT;
 
     nthreads = _nthreads;
@@ -90,6 +183,7 @@ Client::Client(int _nthreads) {
     dist = nullptr; // Will get initialized in startReq()
 
     startedReqs = 0;
+    precision = prec;
 
 
     tBenchClientInit();
@@ -105,6 +199,7 @@ Request *Client::startReq() {
             uint64_t curNs = getCurNs();
             dist = new ExpDist(lambda, seed, curNs);
 
+            std::cout << "Starting Warmup .." << std::endl;
             status = WARMUP;
 
             pthread_barrier_destroy(&barrier);
@@ -150,17 +245,23 @@ void Client::finiReq(Response *resp) {
     assert(it != inFlightReqs.end());
     Request *req = it->second;
 
-    if (status == ROI) {
+    if (status == ROI || status == WARMUP || warmup_count > 0) {
         uint64_t curNs = getCurNs();
-
         assert(curNs > req->genNs);
 
         uint64_t sjrn = curNs - req->genNs;
         assert(sjrn >= resp->svcNs);
-        uint64_t qtime = sjrn - resp->svcNs;
+        //uint64_t qtime = sjrn - resp->svcNs;
 
-        queueTimes.push_back(qtime);
-        svcTimes.push_back(resp->svcNs);
+        uint64_t i = (sjrn / precision) * precision;
+        if (!bins.count(i)) {
+            bins[i] = 0;
+        }
+        bins[i]++;
+        reqs++;
+
+        //queueTimes.push_back(qtime);
+        //svcTimes.push_back(resp->svcNs);
         sjrnTimes.push_back(sjrn);
     }
 
@@ -173,6 +274,10 @@ void Client::_startRoi() {
     assert(status == WARMUP);
     status = ROI;
 
+    bins.clear();
+    reqs = 0;
+
+    aggregateSjrn.clear();
     queueTimes.clear();
     svcTimes.clear();
     sjrnTimes.clear();
@@ -199,21 +304,11 @@ void Client::dumpStats() {
     out.close();
 }
 
-// input float percentile : a number between 1 and 100
-float Client::dumpLatency(float percentile) { // should take percentile as input
-    sort(sjrnTimes.begin(), sjrnTimes.end());
-    uint64_t lat = sjrnTimes[(percentile / 100) * sjrnTimes.size()];
-    sjrnTimes.clear();
-    // TODO also parse, queue times and service times
-    queueTimes.clear();
-    svcTimes.clear();
-    return (float) lat * 1e-6;
-}
 
 /*******************************************************************************
  * Networked Client
  *******************************************************************************/
-NetworkedClient::NetworkedClient(int nthreads, std::string serverip,
+/*NetworkedClient::NetworkedClient(int nthreads, std::string serverip,
                                  int serverport) : Client(nthreads) {
     pthread_mutex_init(&sendLock, nullptr);
     pthread_mutex_init(&recvLock, nullptr);
@@ -298,5 +393,5 @@ bool NetworkedClient::recv(Response *resp) {
     pthread_mutex_unlock(&recvLock);
 
     return true;
-}
+}*/
 

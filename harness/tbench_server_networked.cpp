@@ -44,7 +44,7 @@
 /*******************************************************************************
  * NetworkedServer
  *******************************************************************************/
-NetworkedServer::NetworkedServer(int nthreads, std::string ip, int port, \
+/*NetworkedServer::NetworkedServer(int nthreads, std::string ip, int port, \
         int nclients) 
     : Server(nthreads)
 {
@@ -289,7 +289,7 @@ void NetworkedServer::finish() {
     delete resp;
     
     pthread_mutex_unlock(&sendLock);
-}
+}*/
 
 /*******************************************************************************
  * Per-thread State
@@ -304,7 +304,7 @@ NetworkedServer* server;
 
 /*******************************************************************************
  * API
- *******************************************************************************/
+ *******************************************************************************
 void tBenchServerInit(int nthreads) {
     curTid = 0;
     std::string serverurl = getOpt<std::string>("TBENCH_SERVER", "");
@@ -328,4 +328,4 @@ size_t tBenchRecvReq(void** data) {
 void tBenchSendResp(const void* data, size_t size) {
     return server->sendResp(tid, data, size);
 }
-
+*/

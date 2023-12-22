@@ -42,9 +42,9 @@
 /*******************************************************************************
  * IntegratedServer
  *******************************************************************************/
-IntegratedServer::IntegratedServer(int nthreads) :
+IntegratedServer::IntegratedServer(int nthreads, uint64_t precision) :
         Server(nthreads),
-        Client(nthreads) {}
+        Client(nthreads, precision) {}
 
 size_t IntegratedServer::recvReq(int id, void **data) {
     Request *req = Client::startReq();
@@ -76,6 +76,7 @@ void IntegratedServer::sendResp(int id, const void *data, size_t len) {
     ++finishedReqs;
 
     if (finishedReqs == warmupReqs) {
+        std::cout << "Finished Warmup: " << finishedReqs - 1 << " requests." << std::endl;
         Client::_startRoi();
     } else if (finishedReqs == warmupReqs + maxReqs) {
         Client::dumpStats();
@@ -100,9 +101,9 @@ IntegratedServer *server;
 /*******************************************************************************
  * API
  *******************************************************************************/
-void tBenchServerInit(int nthreads) {
+void tBenchServerInit(int nthreads, uint64_t precision) {
     curTid = 0;
-    server = new IntegratedServer(nthreads);
+    server = new IntegratedServer(nthreads, precision);
 }
 
 void tBenchServerThreadStart() {
@@ -125,3 +126,30 @@ float tBenchServerDumpLatency(float percentile) {
     return server->dumpLatency(percentile);
 }
 
+size_t tBenchServerDumpAggregateLatency(float percentile) {
+    return server->getAggregateLatency(percentile);
+}
+
+double tBenchServerDumpAggregateVariance(double mean) {
+    return server->getAggregateVariance(mean);
+}
+
+double tBenchServerDumpAggregateMean() {
+    return server->getAggregateMean();
+}
+
+float tBenchServerGetSampleLatency(float percentile) {
+    return server->getSampleLatency(percentile);
+}
+
+int tBenchServerGetStatus() {
+    return server->getStatus();
+}
+
+uint64_t getReqs(){
+    return server->Reqs();
+}
+
+size_t getQPS() {
+    return server->QPS();
+}

@@ -175,9 +175,12 @@ TBENCHDIR=../harness
 TBENCH_INCS =$(TBENCHDIR)/tbench_client.h $(TBENCHDIR)/tbench_server.h
 TBENCH_NETWORKED_SERVER_OBJS = $(TBENCHDIR)/tbench_server_networked.o
 TBENCH_NETWORKED_CLIENT_OBJS = $(TBENCHDIR)/client.o \
-							   $(TBENCHDIR)/tbench_client_networked.o
+							   $(TBENCHDIR)/tbench_client_networked.o \
+								 $(TBENCHDIR)/convergence.o
+
 TBENCH_INTEGRATED_OBJS = $(TBENCHDIR)/client.o \
-						 $(TBENCHDIR)/tbench_server_integrated.o
+						 $(TBENCHDIR)/tbench_server_integrated.o \
+						 $(TBENCHDIR)/convergence.o
 
 BENCH_CXXFLAGS += -I$(TBENCHDIR)
 
