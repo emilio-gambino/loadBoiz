@@ -71,19 +71,22 @@ void Client::overrideIfDirty() {
         dist = new ExpDist(lambda, seed, curNs);
         std::cout << "-------------- Changing QPS to: " << lambda * 1e9 << " --------------" << std::endl;
         std::cout << "Resetting state.." << std::endl;
+        sjrnTimes.clear();
         bins.clear();
         reqs = 0;
-        warmup_count = 9;
+        warmup_count = 2;
     }
 }
 
 double Client::getAggregateMean() {
-    if(warmup_count > 0){
+    if (warmup_count > 0) {
         std::cout << warmup_count << " " << std::flush;
         warmup_count--;
-        if(warmup_count == 0) {
+        if (warmup_count == 0) {
             std::cout << std::endl;
+            sjrnTimes.clear();
             bins.clear();
+            reqs = 0;
         }
         return -1;
     }
@@ -104,14 +107,14 @@ double Client::getAggregateVariance(double mean) {
 
 float Client::getSampleVariance() {
     float mean = 0;
-    for (auto it : sjrnTimes) {
+    for (auto it: sjrnTimes) {
         mean += it;
     }
-    mean = mean/sjrnTimes.size();
+    mean = mean / sjrnTimes.size();
     std::cout << "Sample mean: " << mean * 1e-6 << std::endl;
 
     float sumSqr = 0;
-    for(auto it: sjrnTimes){
+    for (auto it: sjrnTimes) {
         sumSqr += (it - mean) * (it - mean);
     }
     std::cout << "Sample variance: " << sumSqr / sjrnTimes.size() * 1e-6 << std::endl;
@@ -130,29 +133,13 @@ double Client::getAggregateLatency(float percentile) {
     uint64_t lat;
     for (auto it = bins.rbegin(); it != bins.rend(); ++it) {
         acc += it->second;
-        if(acc >= reqs * (1 - percentile/100)){
+        if (acc >= reqs * (1 - percentile / 100)) {
             lat = it->first;
             break;
         }
     }
     sjrnTimes.clear();
     return lat;
-    /*if (aggregateSjrn.size() == window || status == WARMUP) {
-        std::vector<int> flatSjrn;
-        for (const auto &v: aggregateSjrn) {
-            flatSjrn.insert(flatSjrn.end(), v.begin(), v.end());
-        }
-        sort(flatSjrn.begin(), flatSjrn.end());
-        uint64_t lat = flatSjrn[(percentile / 100) * flatSjrn.size()];
-
-        aggregateSjrn.erase(aggregateSjrn.begin());
-        sjrnTimes.clear();
-        queueTimes.clear();
-        svcTimes.clear();
-        return lat;
-    }
-    sjrnTimes.clear();
-    return -1;*/
 }
 
 // input float percentile : a number between 1 and 100
@@ -174,7 +161,7 @@ size_t Client::QPS() {
     return lambda * 1e9;
 }
 
-uint64_t Client::Reqs(){
+uint64_t Client::Reqs() {
     return reqs;
 }
 
@@ -266,8 +253,8 @@ void Client::finiReq(Response *resp) {
         assert(sjrn >= resp->svcNs);
         //uint64_t qtime = sjrn - resp->svcNs;
 
-        uint64_t i = (sjrn/precision) * precision;
-        if(!bins.count(i)) {
+        uint64_t i = (sjrn / precision) * precision;
+        if (!bins.count(i)) {
             bins[i] = 0;
         }
         bins[i]++;

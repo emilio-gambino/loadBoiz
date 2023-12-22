@@ -53,8 +53,8 @@ int retry_aborted_transaction = 0;
 int no_reset_counters = 0;
 int backoff_aborted_transaction = 0;
 
-std::vector<std::vector<uint64_t>> accumulator{};
-std::vector<std::vector<uint64_t>> QPS_changes{};
+std::vector <std::vector<uint64_t>> accumulator{};
+std::vector <std::vector<uint64_t>> QPS_changes{};
 auto start_time = std::chrono::high_resolution_clock::now();
 float percentile = 99.0;
 auto tolerance = 0.2 * 1e6;
@@ -119,7 +119,7 @@ static event_avg_counter evt_avg_abort_spins("avg_abort_spins");
 void Client_changeDistribution(const double QPS);
 
 
-void interruptHandler(int signum){
+void interruptHandler(int signum) {
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::minutes>(end_time - start_time);
     std::cout << "Execution time: " << duration.count() << " minutes." << std::endl;
@@ -152,7 +152,8 @@ void interruptHandler(int signum){
     }
     std::ofstream out2("../output/args.txt");
     if (out2.is_open()) {
-        out2 << percentile << " " << INIT_QPS << " " << duration.count() << " " << tolerance * 1e-6 << " " << TAIL_LATENCY_CONSTRAINT * 1e-6 << std::endl;
+        out2 << percentile << " " << INIT_QPS << " " << duration.count() << " " << tolerance * 1e-6 << " "
+             << TAIL_LATENCY_CONSTRAINT * 1e-6 << std::endl;
         out2.close();
     } else {
         std::cout << "CANNOT OPEN FILE" << std::endl;
@@ -183,13 +184,15 @@ bench_worker::run() {
     const double baseLambda = getOpt<double>("TBENCH_QPS", 1000.0);
     Client_changeDistribution(baseLambda);
 
-    const int MIN_CONVERGENCE = 5;
-    const int CONVERGENCE_WINDOW = 10;
+    const int MIN_CONVERGENCE = 20;
+    const int CONVERGENCE_WINDOW = 6;
     std::unique_ptr <IConvergenceModel> convergence_model(
-            new VariationCoefficientModel(3.f, 5, CONVERGENCE_WINDOW));
-    TAIL_LATENCY_CONSTRAINT = 8 * 1e6; // in nanoseconds, here 10ms
+            new VariationCoefficientModel(3.f, MIN_CONVERGENCE, CONVERGENCE_WINDOW));
+    TAIL_LATENCY_CONSTRAINT = 0.8 * 1e6; // in nanoseconds
+    int convergenceCount = 2;
 
     size_t count = 0;
+    size_t last_count = 0;
 
     start_time = std::chrono::high_resolution_clock::now();
 
@@ -231,8 +234,8 @@ bench_worker::run() {
             txn_counts[type]++;
         }
 
-        percentile = 99.0;
-        tolerance = 0.5 * 1e6;
+        percentile = 95.0;
+        tolerance = 0.05 * 1e6;
         uint64_t m = tBenchServerDumpAggregateMean();
         uint64_t var = tBenchServerDumpAggregateVariance(m);
         uint64_t lat = tBenchServerGetSampleLatency(percentile);
@@ -257,12 +260,21 @@ bench_worker::run() {
                   << m * 1e-6 << ", Sample Latency: " << lat * 1e-6 << std::endl;
 
         // Compute new sample size
-        const float Z = 2.33; // Z-score 1.96 for 95-th confidence interval, 2.33 for 99-th
-        uint64_t min_sample = std::ceil(Z * Z * var / (tolerance * tolerance) / 1000) * 1000;
+        const float Z = 1.96; // Z-score 1.96 for 95-th confidence interval, 2.33 for 99-th
+        float E = 0.05 * 1e6;
+        uint64_t min_sample = std::ceil(Z * Z * var / (E * E) / 1000) * 1000;
+        /*if (min_sample / getQPS() > 300) {
+            min_sample = 0;
+        }*/
         uint64_t reqs = getReqs();
 
-        std::cout << "Iteration: " << count << ", Min Sample Size: " << min_sample << ", Current sample size: " << reqs+1
+        std::cout << "Iteration: " << count << ", Min Sample Size: " << min_sample << ", Current sample size: "
+                  << reqs + 1
                   << std::endl;
+
+        if (count - last_count > 100) {
+            min_sample = 0;
+        }
 
         bool ready = (reqs > min_sample);
 
@@ -272,15 +284,24 @@ bench_worker::run() {
             convergence_model->reset();
             auto new_qps = getQPS();
             if (std::abs(latency - TAIL_LATENCY_CONSTRAINT) <= tolerance) {
-                std::cout << TAIL_LATENCY_CONSTRAINT * 1e-6 << std::endl;
-                std::cout << "CONVERGED, LATENCY: " << latency * 1e-6 << ", QPS: " << new_qps << std::endl;
-                running = false;
-            /*} else {
-                new_qps = new_qps * 0.9 + 0.1 * new_qps * TAIL_LATENCY_CONSTRAINT / latency;
+                convergenceCount--;
+                if (convergenceCount > 0) {
+                    std::cout << "CONVERGENCE ATTEMPT " << std::endl;
+                } else {
+                    std::cout << TAIL_LATENCY_CONSTRAINT * 1e-6 << std::endl;
+                    std::cout << "CONVERGED, LATENCY: " << latency * 1e-6 << ", QPS: " << new_qps << std::endl;
+                    running = false;
+                }
+            } else {
+                auto max = new_qps + new_qps * 0.1;
+                new_qps = new_qps * 0.95 + 0.05 * new_qps * TAIL_LATENCY_CONSTRAINT / latency;
+                new_qps = std::ceil((std::min((float) max, (float) new_qps)) / 25) * 25;
                 Client_changeDistribution(new_qps);
-                QPS_changes.push_back({count, new_qps});
-            }*/
-            } else if (latency > TAIL_LATENCY_CONSTRAINT) {
+                QPS_changes.push_back({count, new_qps, (uint64_t)(latency * 1e-6)});
+                convergenceCount = 2;
+                last_count = count;
+            }
+            /*} else if (latency > TAIL_LATENCY_CONSTRAINT) {
                 new_qps -= 100;
                 Client_changeDistribution(new_qps);
                 QPS_changes.push_back({count, new_qps, (uint64_t)(latency * 1e-6)});
@@ -288,7 +309,7 @@ bench_worker::run() {
                 new_qps += 200;
                 Client_changeDistribution(new_qps);
                 QPS_changes.push_back({count, new_qps, (uint64_t)(latency * 1e-6)});
-            }
+            }*/
         }
 
         ntxn_commits = 0;
@@ -327,7 +348,8 @@ bench_worker::run() {
     }
     std::ofstream out2("../output/args.txt");
     if (out2.is_open()) {
-        out2 << percentile << " " << INIT_QPS << " " << duration.count() << " " << tolerance * 1e-6 << " " << TAIL_LATENCY_CONSTRAINT * 1e-6 << std::endl;
+        out2 << percentile << " " << INIT_QPS << " " << duration.count() << " " << tolerance * 1e-6 << " "
+             << TAIL_LATENCY_CONSTRAINT * 1e-6 << std::endl;
         out2.close();
     } else {
         std::cout << "CANNOT OPEN FILE" << std::endl;
@@ -336,7 +358,7 @@ bench_worker::run() {
 
 void
 bench_runner::run() {
-    ops_per_worker = 15000;
+    ops_per_worker = 2000;
     uint64_t precision = 1e3; // histogram bin precision in nanoseconds, here 1 microsecond
     tBenchServerInit(nthreads, precision);
 

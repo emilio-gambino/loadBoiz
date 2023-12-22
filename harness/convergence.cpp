@@ -86,5 +86,5 @@ bool VariationCoefficientModel::aggregate(const float tail_latency, bool ready) 
             << " - wanted vc: < " << wanted_vc << "\n"
             << " - vc: " << vc << "\n";*/
     std::cout << "VC: " << vc << std::endl;
-    return vc < wanted_vc;
+    return vc <= wanted_vc;
 }
