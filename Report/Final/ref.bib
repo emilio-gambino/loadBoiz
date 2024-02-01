@@ -1,0 +1,63 @@
+@inproceedings{in-vitro,
+	author = {Ustiugov, Dmitrii and Park, Dohyun and Cvetkovi\'{c}, Lazar and Djokic, Mihajlo and H\`{e}, Hongyu and Grot, Boris and Klimovic, Ana},
+	title = {Enabling In-Vitro Serverless Systems Research},
+	year = {2023},
+	isbn = {9798400702501},
+	publisher = {Association for Computing Machinery},
+	address = {New York, NY, USA},
+	url = {https://doi.org/10.1145/3605181.3626191},
+	doi = {10.1145/3605181.3626191},
+	abstract = {Serverless is an increasingly popular cloud computing paradigm that has stimulated new systems research opportunities. However, developing and evaluating serverless systems in a research setting (i.e., "in-vitro", without access to a large-scale production cluster and real workloads) is challenging yet vital for innovation. Recently, several serverless providers have released production traces consisting of large sets of functions with their invocation inter-arrival time, execution time, and memory footprint distributions. However, executing the workload synthesized from these traces requires a massive cluster, making experiments expensive and time-consuming.In this work, we show how to use the data available in production traces to construct workload summaries of configurable scales that remain highly representative of the original trace characteristics and can be used to evaluate serverless systems in-vitro. Compared to random sampling of functions from the original trace, our method can generate summaries of up to 10X higher representativity, measured as the average of the Wasserstein distances of the distributions of interest (e.g., function execution time and invocation inter-arrival time) from the respective distributions in the original trace. We release our toolchain that enables researchers to synthesize representative workload summaries and show how it can be used to evaluate the performance of serverless systems at diverse load scale factors.},
+	booktitle = {Proceedings of the 4th Workshop on Resource Disaggregation and Serverless},
+	pages = {1–7},
+	numpages = {7},
+	location = {Koblenz, Germany},
+	series = {WORDS '23}
+}
+@INPROCEEDINGS{treadmill,
+	author={Zhang, Yunqi and Meisner, David and Mars, Jason and Tang, Lingjia},
+	booktitle={2016 ACM/IEEE 43rd Annual International Symposium on Computer Architecture (ISCA)}, 
+	title={Treadmill: Attributing the Source of Tail Latency through Precise Load Testing and Statistical Inference}, 
+	year={2016},
+	volume={},
+	number={},
+	pages={456-468},
+	doi={10.1109/ISCA.2016.47}
+}
+
+@INPROCEEDINGS{tailbench,
+	author={Kasture, Harshad and Sanchez, Daniel},
+	booktitle={2016 IEEE International Symposium on Workload Characterization (IISWC)},
+	title={Tailbench: a benchmark suite and evaluation methodology for latency-critical applications},
+	year={2016},
+	volume={},
+	number={},
+	pages={1-10},
+	doi={10.1109/IISWC.2016.7581261}
+}
+
+@inproceedings{talestail,
+	author = {Li, Jialin and Sharma, Naveen Kr. and Ports, Dan R. K. and Gribble, Steven D.},
+	title = {Tales of the Tail: Hardware, OS, and Application-Level Sources of Tail Latency},
+	year = {2014},
+	isbn = {9781450332521},
+	publisher = {Association for Computing Machinery},
+	address = {New York, NY, USA},
+	url = {https://doi.org/10.1145/2670979.2670988},
+	doi = {10.1145/2670979.2670988},
+	abstract = {Interactive services often have large-scale parallel implementations. To deliver fast responses, the median and tail latencies of a service's components must be low. In this paper, we explore the hardware, OS, and application-level sources of poor tail latency in high throughput servers executing on multi-core machines.We model these network services as a queuing system in order to establish the best-achievable latency distribution. Using fine-grained measurements of three different servers (a null RPC service, Memcached, and Nginx) on Linux, we then explore why these servers exhibit significantly worse tail latencies than queuing models alone predict. The underlying causes include interference from background processes, request re-ordering caused by poor scheduling or constrained concurrency models, suboptimal interrupt routing, CPU power saving mechanisms, and NUMA effects.We systematically eliminate these factors and show that Memcached can achieve a median latency of 11 μs and a 99.9th percentile latency of 32 μs at 80\% utilization on a four-core system. In comparison, a na\"{\i}ve deployment of Memcached at the same utilization on a single-core system has a median latency of 100 μs and a 99.9th percentile latency of 5 ms. Finally, we demonstrate that tradeoffs exist between throughput, energy, and tail latency.},
+	booktitle = {Proceedings of the ACM Symposium on Cloud Computing},
+	pages = {1–14},
+	numpages = {14},
+	keywords = {Tail latency, predictable latency},
+	location = {Seattle, WA, USA},
+	series = {SOCC '14}
+}
+@inproceedings{clouds,
+      title = {Clearing the Clouds: A Study of Emerging Scale-out  Workloads on Modern Hardware},
+      author = {Ferdman, Michael and Adileh, Almutaz and Kocberber, Onur  and Volos, Stavros and Alisafaee, Mohammad and Jevdjic,  Djordje and Kaynak, Cansu and Popescu, Adrian Daniel and  Ailamaki, Anastasia and Falsafi, Babak},
+      journal = {Proceedings of the Seventeenth International Conference on  Architectural Support for Programming Languages and  Operating Systems},
+      year = {2012},
+      abstract = {Emerging scale-out workloads require extensive amounts of  computational resources. However, data centers using modern  server hardware face physical constraints in space and  power, limiting further expansion and calling for  improvements in the computational density per server and in  the per-operation energy. Continuing to improve the  computational resources of the cloud while staying within  physical constraints mandates optimizing server efficiency  to ensure that server hardware closely matches the needs of  scale-out workloads. We use performance counters on modern  servers to study a wide range of scale-out workloads,  finding that today’s predominant processor  micro-architecture is inefficient for running these  workloads. We find that inefficiency comes from the  mismatch between the workload needs and modern processors,  particularly in the organization of instruction and data  memory systems and the processor core micro-architecture.  Moreover, while today’s predominant micro-architecture is  inefficient when executing scale-out workloads, we find  that continuing the current trends will further exacerbate  the inefficiency in the future. In this work, we identify  the key micro-architectural needs of scale-out workloads,  calling for a change in the trajectory of server processors  that would lead to improved computational density and power  efficiency in data centers.},
+      url = {http://infoscience.epfl.ch/record/173764},
+}
